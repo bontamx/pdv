@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#222222">
+<title>Bonta</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Arial, Helvetica, sans-serif; background: #fafafa; color: #222; font-size: 16px; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+  main { max-width: 440px; margin: 0 auto; padding: 22px 18px 40px; }
+  h1 { text-align: center; font-size: 28px; margin: 18px 0 2px; }
+  .sub { text-align: center; color: #666; margin-bottom: 20px; }
+  h2 { font-size: 19px; margin: 6px 0 12px; }
+  label { display: block; font-size: 13px; font-weight: bold; margin: 14px 0 5px; }
+  input { width: 100%; padding: 13px; border: 1px solid #bbb; border-radius: 9px; font-size: 16px; background: #fff; }
+  .pw { position: relative; } .pw input { padding-right: 70px; }
+  .ver { position: absolute; right: 6px; top: 6px; bottom: 6px; border: 0; background: #eee; border-radius: 7px; padding: 0 12px; font-size: 13px; width: auto; margin: 0; color: #222; }
+  button { width: 100%; padding: 14px; border: 0; border-radius: 10px; cursor: pointer; font-size: 16px; font-weight: bold; margin-top: 18px; }
+  .principal { background: #222; color: #fff; } .secundario { background: #eee; color: #222; }
+  .enlace { background: none; color: #1976d2; font-weight: normal; font-size: 14px; margin-top: 12px; padding: 8px; }
+  button:disabled { opacity: .55; cursor: default; }
+  .aviso { display: none; margin-top: 14px; padding: 11px; border-radius: 8px; font-size: 14px; line-height: 1.45; }
+  .error { background: #ffebee; color: #7f0020; } .ok { background: #e8f5e9; color: #1b5e20; } .info { background: #e3f2fd; color: #0d3c7a; }
+  .oculto { display: none; }
+  .reglas { font-size: 12px; color: #666; margin-top: 6px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 14px; }
+  td { padding: 7px 4px; border-bottom: 1px solid #eee; } td:last-child { text-align: right; color: #555; }
+  .tarjeta { background: #fff; border: 1px solid #ddd; border-radius: 12px; padding: 14px; margin-top: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🍝 Bonta</h1>
+  <div class="sub" id="subtitulo">Punto de venta</div>
+
+  <!-- Entrar -->
+  <section id="pLogin">
+    <h2>Entrar</h2>
+    <label for="lCorreo">Correo</label>
+    <input id="lCorreo" type="email" inputmode="email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
+    <label for="lClave">Contraseña</label>
+    <div class="pw"><input id="lClave" type="password" autocomplete="current-password"><button class="ver" type="button" data-ver="lClave">Ver</button></div>
+    <button class="principal" id="bEntrar">Entrar</button>
+    <button class="enlace" id="bOlvide">Olvidé mi contraseña</button>
+  </section>
+
+  <!-- Cambio obligatorio / voluntario -->
+  <section id="pCambio" class="oculto">
+    <h2 id="tCambio">Crea tu contraseña</h2>
+    <div class="aviso info" style="display:block" id="nCambio">Es tu primer ingreso: la contraseña temporal solo sirve para esto. Escribe una contraseña tuya.</div>
+    <label for="cActual">Contraseña actual (la temporal)</label>
+    <div class="pw"><input id="cActual" type="password" autocomplete="current-password"><button class="ver" type="button" data-ver="cActual">Ver</button></div>
+    <label for="cNueva">Contraseña nueva</label>
+    <div class="pw"><input id="cNueva" type="password" autocomplete="new-password"><button class="ver" type="button" data-ver="cNueva">Ver</button></div>
+    <div class="reglas">Mínimo 8 caracteres, con letras y números.</div>
+    <label for="cNueva2">Repite la contraseña nueva</label>
+    <div class="pw"><input id="cNueva2" type="password" autocomplete="new-password"><button class="ver" type="button" data-ver="cNueva2">Ver</button></div>
+    <button class="principal" id="bCambiar">Guardar contraseña</button>
+    <button class="enlace" id="bCancelarCambio">Cancelar</button>
+  </section>
+
+  <!-- Recuperar: paso 1 (pedir código) y paso 2 (código + contraseña nueva) -->
+  <section id="pRecuperar" class="oculto">
+    <h2>Recuperar mi contraseña</h2>
+    <div id="rPaso1">
+      <label for="rCorreo">Tu correo</label>
+      <input id="rCorreo" type="email" inputmode="email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
+      <button class="principal" id="bPedirCodigo">Enviarme un código</button>
+      <button class="enlace" id="bYaTengoCodigo">Ya tengo un código</button>
+    </div>
+    <div id="rPaso2" class="oculto">
+      <label for="rCodigo">Código que llegó a tu correo</label>
+      <input id="rCodigo" type="text" autocomplete="one-time-code" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="8">
+      <label for="rNueva">Contraseña nueva</label>
+      <div class="pw"><input id="rNueva" type="password" autocomplete="new-password"><button class="ver" type="button" data-ver="rNueva">Ver</button></div>
+      <div class="reglas">Mínimo 8 caracteres, con letras y números.</div>
+      <button class="principal" id="bRestablecer">Cambiar contraseña</button>
+    </div>
+    <button class="enlace" id="bVolver">← Volver a entrar</button>
+  </section>
+
+  <!-- Inicio (provisional: aquí irán las pantallas del bloque 2) -->
+  <section id="pInicio" class="oculto">
+    <h2 id="iSaludo"></h2>
+    <div class="tarjeta">
+      <div id="iRol" style="font-weight:bold"></div>
+      <div class="reglas">Lo que tu rol puede hacer (0 = sin acceso, 1 ver, 2 capturar, 3 editar, 4 administrar):</div>
+      <table id="iPermisos"></table>
+    </div>
+    <div class="aviso info" style="display:block">Aquí van a ir Nueva venta, Pedidos y Cancelar en el siguiente paso. Por ahora esta pantalla sirve para comprobar que el acceso funciona.</div>
+    <button class="secundario" id="bCambiarMia">Cambiar mi contraseña</button>
+    <button class="principal" id="bSalir">Cerrar sesión</button>
+  </section>
+
+  <div id="aviso" class="aviso"></div>
+</main>
+
+<script>
+/* ============ CONFIGURACIÓN: pega aquí la dirección de tu implementación web (termina en /exec) ============ */
+var API_URL = 'https://script.google.com/macros/s/AKfycbxopYkQzg4rgpehB3PHlKYmMn3t_JrEa5eveZN2rk18usGKYM2p9s4ud1mi6LlxKnCtnA/execx';
+/* ========================================================================================================== */
+
+var $ = function (id) { return document.getElementById(id); };
+var CLAVE_SESION = 'bonta_sesion';
+var estado = { token: '', usuario: null, permisos: {}, forzarCambio: false };
+
+function guardarSesion() { try { localStorage.setItem(CLAVE_SESION, JSON.stringify({ token: estado.token, t: Date.now() })); } catch (e) {} }
+function leerSesion() { try { var s = JSON.parse(localStorage.getItem(CLAVE_SESION) || 'null'); return s && s.token && Date.now() - s.t < 12 * 3600e3 ? s.token : ''; } catch (e) { return ''; } }
+function borrarSesion() { try { localStorage.removeItem(CLAVE_SESION); } catch (e) {} estado.token = ''; estado.usuario = null; estado.permisos = {}; }
+
+function aviso(texto, tipo) { var a = $('aviso'); if (!texto) { a.style.display = 'none'; return; } a.className = 'aviso ' + tipo; a.textContent = texto; a.style.display = 'block'; }
+function mostrar(id) {
+  ['pLogin', 'pCambio', 'pRecuperar', 'pInicio'].forEach(function (p) { $(p).className = p === id ? '' : 'oculto'; });
+  aviso('');
+}
+function ocupado(btn, si, texto) { btn.disabled = si; if (si) { btn.dataset.t = btn.textContent; btn.textContent = texto || 'Un momento...'; } else if (btn.dataset.t) btn.textContent = btn.dataset.t; }
+
+/* ---------- llamada a la API (POST como texto, sin cabeceras raras: así el navegador no pide permiso previo) ---------- */
+function api(accion, datos, token) {
+  if (!API_URL || API_URL.indexOf('PEGA_AQUI') === 0) return Promise.reject(new Error('Falta configurar la dirección de la API en este archivo (API_URL).'));
+  return fetch(API_URL, { method: 'POST', body: JSON.stringify({ accion: accion, token: token || '', datos: datos || {} }), redirect: 'follow' })
+    .then(function (r) { return r.json(); })
+    .then(function (j) {
+      if (j && j.ok) return j;
+      var e = new Error((j && j.error) || 'No se pudo completar la acción.'); e.codigo = j && j.codigo; throw e;
+    }, function () { throw new Error('No hay conexión con el servidor. Revisa tu internet e intenta de nuevo.'); });
+}
+function sesionVencida(e) {
+  if (e && e.codigo === 'SESION') { borrarSesion(); mostrar('pLogin'); aviso('Tu sesión venció. Entra de nuevo.', 'info'); return true; }
+  if (e && e.codigo === 'DEBE_CAMBIAR') { irACambio(true); return true; }
+  return false;
+}
+
+/* ---------- pantallas ---------- */
+function irACambio(obligatorio) {
+  estado.forzarCambio = !!obligatorio;
+  $('tCambio').textContent = obligatorio ? 'Crea tu contraseña' : 'Cambiar mi contraseña';
+  $('nCambio').textContent = obligatorio ? 'Es tu primer ingreso (o te reiniciaron la contraseña): la temporal solo sirve para esto. Escribe una contraseña tuya.' : 'Escribe tu contraseña actual y la nueva.';
+  $('cActual').value = ''; $('cNueva').value = ''; $('cNueva2').value = '';
+  $('bCancelarCambio').className = obligatorio ? 'enlace oculto' : 'enlace';
+  mostrar('pCambio');
+}
+function irAInicio() {
+  var u = estado.usuario || {};
+  $('iSaludo').textContent = 'Hola, ' + (u.nombre || '');
+  $('iRol').textContent = 'Rol: ' + (u.rol || '');
+  var t = $('iPermisos'); t.innerHTML = '';
+  Object.keys(estado.permisos || {}).forEach(function (m) {
+    var tr = document.createElement('tr'), a = document.createElement('td'), b = document.createElement('td');
+    a.textContent = m; b.textContent = estado.permisos[m]; tr.appendChild(a); tr.appendChild(b); t.appendChild(tr);
+  });
+  mostrar('pInicio');
+}
+
+/* ---------- acciones ---------- */
+$('bEntrar').addEventListener('click', function () {
+  var c = $('lCorreo').value.trim(), p = $('lClave').value;
+  if (!c || !p) { aviso('Escribe tu correo y tu contraseña.', 'error'); return; }
+  ocupado($('bEntrar'), true, 'Entrando...'); aviso('');
+  api('login', { correo: c, password: p }).then(function (r) {
+    estado.token = r.token; estado.usuario = r.usuario; estado.permisos = r.permisos || {}; guardarSesion();
+    $('lClave').value = '';
+    if (r.debeCambiar) { irACambio(true); $('cActual').value = p; } else irAInicio();
+  }).catch(function (e) { aviso(e.message, 'error'); }).then(function () { ocupado($('bEntrar'), false); });
+});
+['lCorreo', 'lClave'].forEach(function (i) { $(i).addEventListener('keydown', function (e) { if (e.key === 'Enter') $('bEntrar').click(); }); });
+
+$('bCambiar').addEventListener('click', function () {
+  var a = $('cActual').value, n = $('cNueva').value, n2 = $('cNueva2').value;
+  if (!a || !n) { aviso('Llena todos los campos.', 'error'); return; }
+  if (n !== n2) { aviso('Las contraseñas nuevas no coinciden.', 'error'); return; }
+  ocupado($('bCambiar'), true, 'Guardando...');
+  api('cambiarPassword', { actual: a, nueva: n }, estado.token).then(function (r) {
+    estado.token = r.token; guardarSesion(); return api('yo', {}, estado.token);
+  }).then(function (r) {
+    estado.usuario = r.usuario; estado.permisos = r.permisos || {}; irAInicio(); aviso('Contraseña guardada. Ya puedes usar la app.', 'ok');
+  }).catch(function (e) { if (!sesionVencida(e)) aviso(e.message, 'error'); }).then(function () { ocupado($('bCambiar'), false); });
+});
+$('bCancelarCambio').addEventListener('click', irAInicio);
+$('bCambiarMia').addEventListener('click', function () { irACambio(false); });
+
+$('bOlvide').addEventListener('click', function () { $('rCorreo').value = $('lCorreo').value; $('rPaso1').className = ''; $('rPaso2').className = 'oculto'; mostrar('pRecuperar'); });
+$('bVolver').addEventListener('click', function () { mostrar('pLogin'); });
+$('bYaTengoCodigo').addEventListener('click', function () { if (!$('rCorreo').value.trim()) { aviso('Escribe tu correo.', 'error'); return; } $('rPaso1').className = 'oculto'; $('rPaso2').className = ''; aviso(''); });
+$('bPedirCodigo').addEventListener('click', function () {
+  var c = $('rCorreo').value.trim();
+  if (!c) { aviso('Escribe tu correo.', 'error'); return; }
+  ocupado($('bPedirCodigo'), true, 'Enviando...');
+  api('solicitarRecuperacion', { correo: c }).then(function (r) {
+    $('rPaso1').className = 'oculto'; $('rPaso2').className = ''; aviso(r.mensaje, 'ok');
+  }).catch(function (e) { aviso(e.message, 'error'); }).then(function () { ocupado($('bPedirCodigo'), false); });
+});
+$('bRestablecer').addEventListener('click', function () {
+  var c = $('rCorreo').value.trim(), cod = $('rCodigo').value.trim(), n = $('rNueva').value;
+  if (!cod || !n) { aviso('Escribe el código y tu contraseña nueva.', 'error'); return; }
+  ocupado($('bRestablecer'), true, 'Guardando...');
+  api('restablecer', { correo: c, codigo: cod, nueva: n }).then(function (r) {
+    $('lCorreo').value = c; $('lClave').value = ''; $('rCodigo').value = ''; $('rNueva').value = ''; mostrar('pLogin'); aviso(r.mensaje, 'ok');
+  }).catch(function (e) { aviso(e.message, 'error'); }).then(function () { ocupado($('bRestablecer'), false); });
+});
+
+$('bSalir').addEventListener('click', function () {
+  var t = estado.token; borrarSesion(); mostrar('pLogin'); aviso('Sesión cerrada.', 'ok');
+  if (t) api('logout', {}, t).catch(function () {});
+});
+
+/* mostrar / ocultar contraseña */
+Array.prototype.forEach.call(document.querySelectorAll('.ver'), function (b) {
+  b.addEventListener('click', function () { var i = $(b.getAttribute('data-ver')); var ver = i.type === 'password'; i.type = ver ? 'text' : 'password'; b.textContent = ver ? 'Ocultar' : 'Ver'; });
+});
+
+/* al abrir: si hay sesión guardada, entrar directo */
+(function () {
+  var t = leerSesion();
+  if (!t) { mostrar('pLogin'); return; }
+  estado.token = t;
+  api('yo', {}, t).then(function (r) { estado.usuario = r.usuario; estado.permisos = r.permisos || {}; irAInicio(); })
+    .catch(function (e) { if (!sesionVencida(e)) { mostrar('pLogin'); } });
+})();
+</script>
+</body>
+</html>
