@@ -83,13 +83,13 @@
   <!-- Inicio (provisional: aquí irán las pantallas del bloque 2) -->
   <section id="pInicio" class="oculto">
     <h2 id="iSaludo"></h2>
-    <div class="tarjeta">
-      <div id="iRol" style="font-weight:bold"></div>
+    <div id="iMenu"></div>
+    <details class="tarjeta">
+      <summary id="iRol" style="font-weight:bold;cursor:pointer"></summary>
       <div class="reglas">Lo que tu rol puede hacer (0 = sin acceso, 1 ver, 2 capturar, 3 editar, 4 administrar):</div>
       <table id="iPermisos"></table>
-    </div>
-    <div class="aviso info" style="display:block">Aquí van a ir Nueva venta, Pedidos y Cancelar en el siguiente paso. Por ahora esta pantalla sirve para comprobar que el acceso funciona.</div>
-    <button class="secundario" id="bCambiarMia">Cambiar mi contraseña</button>
+    </details>
+<button class="secundario" id="bCambiarMia">Cambiar mi contraseña</button>
     <button class="principal" id="bSalir">Cerrar sesión</button>
   </section>
 
@@ -101,6 +101,7 @@
 var API_URL = 'https://script.google.com/macros/s/AKfycbyp8QNmnaXMUD1zASyFPt7k9zZado8Ffeec1C4jDcyw-zLNMK5Sh9LomATrX1-Q0vxe7w/exec';
 /* ========================================================================================================== */
 
+try { if (API_URL && API_URL.indexOf('PEGA_AQUI') !== 0) localStorage.setItem('bonta_api', API_URL); } catch (e) {}
 var $ = function (id) { return document.getElementById(id); };
 var CLAVE_SESION = 'bonta_sesion';
 var estado = { token: '', usuario: null, permisos: {}, forzarCambio: false };
@@ -120,11 +121,14 @@ function ocupado(btn, si, texto) { btn.disabled = si; if (si) { btn.dataset.t = 
 function api(accion, datos, token) {
   if (!API_URL || API_URL.indexOf('PEGA_AQUI') === 0) return Promise.reject(new Error('Falta configurar la dirección de la API en este archivo (API_URL).'));
   return fetch(API_URL, { method: 'POST', body: JSON.stringify({ accion: accion, token: token || '', datos: datos || {} }), redirect: 'follow' })
-    .then(function (r) { return r.json(); })
-    .then(function (j) {
+    .then(function (r) { return r.text(); }, function () {
+      throw new Error('No se pudo conectar con el servidor. Si tu internet funciona, revisa que la implementación de Apps Script esté publicada para «Cualquier persona» y que la dirección termine en /exec.');
+    })
+    .then(function (txt) {
+      var j; try { j = JSON.parse(txt); } catch (x) { throw new Error('El servidor respondió algo inesperado. Revisa que la implementación tenga la última versión del código (Seguridad25.gs) y que la dirección sea la correcta.'); }
       if (j && j.ok) return j;
       var e = new Error((j && j.error) || 'No se pudo completar la acción.'); e.codigo = j && j.codigo; throw e;
-    }, function () { throw new Error('No hay conexión con el servidor. Revisa tu internet e intenta de nuevo.'); });
+    });
 }
 function sesionVencida(e) {
   if (e && e.codigo === 'SESION') { borrarSesion(); mostrar('pLogin'); aviso('Tu sesión venció. Entra de nuevo.', 'info'); return true; }
@@ -150,6 +154,14 @@ function irAInicio() {
     var tr = document.createElement('tr'), a = document.createElement('td'), b = document.createElement('td');
     a.textContent = m; b.textContent = estado.permisos[m]; tr.appendChild(a); tr.appendChild(b); t.appendChild(tr);
   });
+  var m = $('iMenu'); m.innerHTML = '';
+  [['venta.html', '🧾 Nueva venta', 'Ventas', 2, '#1976d2'], ['pedidos.html', '📋 Pedidos por entregar', 'Pedidos', 1, '#2e7d32'], ['cancelar.html', '❌ Cancelar pedido o producto', 'Cancelaciones', 3, '#b00020']].forEach(function (x) {
+    if ((estado.permisos[x[2]] || 0) < x[3]) return;
+    var a = document.createElement('a'); a.href = x[0]; a.textContent = x[1];
+    a.style.cssText = 'display:block;background:' + x[4] + ';color:#fff;text-decoration:none;border-radius:12px;padding:18px 14px;margin-top:12px;font-size:18px;font-weight:bold;text-align:center';
+    m.appendChild(a);
+  });
+  if (!m.children.length) { m.innerHTML = '<div class="aviso info" style="display:block">Tu rol todavía no tiene pantallas asignadas. Pide acceso a la administración.</div>'; }
   mostrar('pInicio');
 }
 
