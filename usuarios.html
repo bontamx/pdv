@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Usuarios · Bonta</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; padding: 12px; margin: 0; color: #222; font-size: 15px; background: #fafafa; }
+  main { max-width: 560px; margin: 0 auto; }
+  h2 { font-size: 19px; margin: 8px 0 10px; } h3 { font-size: 15px; margin: 16px 0 6px; }
+  label { display: block; font-size: 12px; font-weight: bold; margin: 10px 0 4px; }
+  input, select { width: 100%; padding: 11px; border: 1px solid #bbb; border-radius: 8px; font-size: 15px; background: #fff; }
+  button { border: 0; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold; padding: 11px 12px; }
+  .principal { background: #222; color: #fff; width: 100%; margin-top: 12px; }
+  .gris { background: #eee; color: #222; } .rojo { background: #ffebee; color: #b00020; } .verde { background: #e8f5e9; color: #1b5e20; }
+  .card { background: #fff; border: 1px solid #ddd; border-radius: 12px; padding: 12px; margin-top: 10px; }
+  .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .nom { font-weight: bold; } .sub { color: #666; font-size: 12px; margin-top: 2px; word-break: break-all; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; margin-left: 4px; }
+  .p-Activo { background: #e8f5e9; color: #1b5e20; } .p-Inactivo { background: #eee; color: #666; } .p-cambio { background: #fff8e1; color: #8a6d00; }
+  .acc { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; } .acc button { flex: 1; min-width: 40%; }
+  .aviso { display: none; margin-top: 10px; padding: 10px; border-radius: 8px; font-size: 13px; line-height: 1.45; }
+  .error { background: #ffebee; color: #7f0020; } .ok { background: #e8f5e9; color: #1b5e20; } .info { background: #e3f2fd; color: #0d3c7a; }
+  .temp { background: #fffde7; border: 2px solid #f9a825; border-radius: 12px; padding: 12px; margin-top: 12px; display: none; }
+  .clave { font-family: monospace; font-size: 24px; font-weight: bold; letter-spacing: 1px; margin: 6px 0; user-select: all; }
+</style>
+</head>
+<body>
+<main>
+  <h2>👥 Usuarios y permisos</h2>
+
+  <div id="temp" class="temp">
+    <div id="tTitulo" style="font-weight:bold"></div>
+    <div class="clave" id="tClave"></div>
+    <div style="font-size:12px;color:#555">Se muestra <b>una sola vez</b> y vence en 48 horas. Al entrar, la persona deberá crear su propia contraseña.</div>
+    <button class="principal" id="bCopiar">📋 Copiar mensaje de bienvenida</button>
+    <button class="gris" style="width:100%;margin-top:8px" id="bCerrarTemp">Ya la entregué, cerrar</button>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">Nuevo usuario</h3>
+    <label for="nCorreo">Correo</label>
+    <input id="nCorreo" type="email" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck="false">
+    <label for="nNombre">Nombre</label>
+    <input id="nNombre" type="text" autocomplete="off">
+    <label for="nRol">Rol</label>
+    <select id="nRol"></select>
+    <button class="principal" id="bCrear">Crear usuario</button>
+  </div>
+
+  <div id="aviso" class="aviso"></div>
+  <h3>Usuarios</h3>
+  <div id="lista"></div>
+  <button class="gris" style="width:100%;margin-top:14px" id="bActualizar">🔄 Actualizar</button>
+</main>
+
+<script>
+var ROLES = ['Logística', 'Administración', 'Comunicaciones', 'Marketing', 'Operaciones'];
+var $ = function (id) { return document.getElementById(id); };
+var API = ''; try { API = localStorage.getItem('bonta_api') || ''; } catch (e) {}
+function leerToken() { try { var s = JSON.parse(localStorage.getItem('bonta_sesion') || 'null'); return s && s.token && Date.now() - s.t < 12 * 3600e3 ? s.token : ''; } catch (e) { return ''; } }
+function irLogin() { try { localStorage.removeItem('bonta_sesion'); } catch (e) {} location.replace('index.html'); }
+if (!leerToken() || !API) irLogin();
+
+function api(accion, datos) {
+  return fetch(API, { method: 'POST', body: JSON.stringify({ accion: accion, token: leerToken(), datos: datos || {} }), redirect: 'follow' })
+    .then(function (r) { return r.text(); }, function () { throw new Error('No se pudo conectar con el servidor. Revisa tu internet e intenta de nuevo.'); })
+    .then(function (txt) {
+      var j; try { j = JSON.parse(txt); } catch (x) { throw new Error('El servidor respondió algo inesperado. Intenta de nuevo.'); }
+      if (j && j.ok) return j;
+      var e = new Error((j && j.error) || 'No se pudo completar la acción.'); e.codigo = j && j.codigo; throw e;
+    });
+}
+function fallo(e) { if (e && (e.codigo === 'SESION' || e.codigo === 'DEBE_CAMBIAR')) { irLogin(); return; } aviso(e.message, 'error'); }
+function aviso(t, tipo) { var a = $('aviso'); if (!t) { a.style.display = 'none'; return; } a.className = 'aviso ' + tipo; a.textContent = t; a.style.display = 'block'; }
+
+ROLES.forEach(function (r) { var o = document.createElement('option'); o.value = r; o.textContent = r; $('nRol').appendChild(o); });
+
+var ultimoMensaje = '';
+function mostrarTemporal(nombre, correo, temporal) {
+  var url = new URL('index.html', location.href).href;
+  ultimoMensaje = 'Hola ' + nombre + '. Tu acceso a Bonta:\n' + url + '\nUsuario: ' + correo + '\nContraseña temporal: ' + temporal + '\n(Vence en 48 horas. Al entrar te pedirá crear tu propia contraseña.)';
+  $('tTitulo').textContent = 'Contraseña temporal de ' + nombre + ' (' + correo + ')';
+  $('tClave').textContent = temporal; $('temp').style.display = 'block';
+  try { window.scrollTo(0, 0); } catch (e) {}
+}
+$('bCerrarTemp').addEventListener('click', function () { $('temp').style.display = 'none'; $('tClave').textContent = ''; ultimoMensaje = ''; });
+$('bCopiar').addEventListener('click', function () {
+  var ok = function () { aviso('Mensaje copiado. Pégalo en WhatsApp o donde lo vayas a mandar.', 'ok'); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ultimoMensaje).then(ok, function () { window.prompt('Copia este mensaje:', ultimoMensaje); });
+  else window.prompt('Copia este mensaje:', ultimoMensaje);
+});
+
+function cargar() {
+  api('listarUsuarios').then(function (r) { pintar(r.usuarios); }).catch(fallo);
+}
+function pintar(us) {
+  var l = $('lista'); l.innerHTML = '';
+  us.forEach(function (u) {
+    var c = document.createElement('div'); c.className = 'card';
+    var top = document.createElement('div'); top.className = 'top';
+    var izq = document.createElement('div');
+    var n = document.createElement('div'); n.className = 'nom'; n.textContent = u.nombre;
+    var p1 = document.createElement('span'); p1.className = 'pill p-' + u.estado; p1.textContent = u.estado; n.appendChild(p1);
+    if (u.debeCambiar) { var p2 = document.createElement('span'); p2.className = 'pill p-cambio'; p2.textContent = 'aún no crea su contraseña'; n.appendChild(p2); }
+    var s = document.createElement('div'); s.className = 'sub'; s.textContent = u.correo + ' · ' + u.id;
+    izq.appendChild(n); izq.appendChild(s); top.appendChild(izq); c.appendChild(top);
+    var sel = document.createElement('select'); sel.style.marginTop = '10px';
+    ROLES.forEach(function (r) { var o = document.createElement('option'); o.value = r; o.textContent = r; if (r === u.rol) o.selected = true; sel.appendChild(o); });
+    sel.addEventListener('change', function () {
+      if (!confirm('¿Cambiar el rol de ' + u.nombre + ' a ' + sel.value + '?')) { sel.value = u.rol; return; }
+      api('cambiarRolUsuario', { id: u.id, rol: sel.value }).then(function () { aviso('Rol actualizado.', 'ok'); cargar(); }).catch(fallo);
+    });
+    c.appendChild(sel);
+    var acc = document.createElement('div'); acc.className = 'acc';
+    var b1 = document.createElement('button'); b1.className = 'gris'; b1.textContent = '🔑 Reiniciar contraseña';
+    b1.addEventListener('click', function () {
+      if (!confirm('¿Reiniciar la contraseña de ' + u.nombre + '? Se cerrará su sesión y recibirá una temporal.')) return;
+      api('reiniciarPassword', { id: u.id }).then(function (r) { mostrarTemporal(u.nombre, r.correo, r.temporal); cargar(); }).catch(fallo);
+    });
+    var b2 = document.createElement('button'); b2.className = u.estado === 'Activo' ? 'rojo' : 'verde'; b2.textContent = u.estado === 'Activo' ? '⛔ Desactivar' : '✅ Activar';
+    b2.addEventListener('click', function () {
+      var nuevo = u.estado === 'Activo' ? 'Inactivo' : 'Activo';
+      if (!confirm('¿' + (nuevo === 'Inactivo' ? 'Desactivar' : 'Activar') + ' a ' + u.nombre + '?')) return;
+      api('cambiarEstadoUsuario', { id: u.id, estado: nuevo }).then(function () { aviso('Listo.', 'ok'); cargar(); }).catch(fallo);
+    });
+    acc.appendChild(b1); acc.appendChild(b2); c.appendChild(acc); l.appendChild(c);
+  });
+  if (!us.length) l.innerHTML = '<div class="card">Todavía no hay usuarios.</div>';
+}
+$('bCrear').addEventListener('click', function () {
+  var correo = $('nCorreo').value.trim(), nombre = $('nNombre').value.trim(), rol = $('nRol').value;
+  if (!correo || !nombre) { aviso('Escribe el correo y el nombre.', 'error'); return; }
+  $('bCrear').disabled = true; aviso('');
+  api('crearUsuario', { correo: correo, nombre: nombre, rol: rol }).then(function (r) {
+    mostrarTemporal(nombre, r.correo, r.temporal); $('nCorreo').value = ''; $('nNombre').value = ''; cargar();
+  }).catch(fallo).then(function () { $('bCrear').disabled = false; });
+});
+$('bActualizar').addEventListener('click', cargar);
+
+document.addEventListener('DOMContentLoaded', function () {
+  var b = document.createElement('div');
+  b.style.cssText = 'position:sticky;top:0;z-index:50;background:#222;padding:10px 12px;margin:-12px -12px 10px';
+  b.innerHTML = '<a href="index.html" style="color:#fff;text-decoration:none;font-weight:bold;font-size:15px">← Inicio · Bonta</a>';
+  document.body.insertBefore(b, document.body.firstChild);
+});
+cargar();
+</script>
+</body>
+</html>
