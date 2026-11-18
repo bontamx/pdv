@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Nueva venta · Bonta</title>
+<base target="_top">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; padding: 12px; margin: 0; color: #222; background: #fff; font-size: 14px; }
+  h2 { margin: 0 0 12px; font-size: 18px; }
+  h3 { margin: 16px 0 6px; font-size: 14px; }
+  label { display: block; font-size: 12px; font-weight: bold; margin: 10px 0 4px; }
+  input, select, textarea { width: 100%; padding: 9px; border: 1px solid #ccc; border-radius: 5px; font-size: 14px; background: #fff; }
+  textarea { min-height: 48px; resize: vertical; }
+  input[readonly] { background: #f3f3f3; }
+  button { width: 100%; padding: 10px; border: 0; border-radius: 6px; cursor: pointer; font-size: 13px; margin-top: 8px; }
+  .agregar { background: #1976d2; color: #fff; font-weight: bold; }
+  .guardar { background: #222; color: #fff; font-weight: bold; font-size: 15px; margin-top: 14px; padding: 12px; }
+  .sec { background: #eee; color: #222; }
+  .rel { position: relative; }
+  .sug { position: absolute; left: 0; right: 0; background: #fff; border: 1px solid #bbb; border-radius: 5px; z-index: 10; max-height: 220px; overflow-y: auto; display: none; box-shadow: 0 3px 8px rgba(0,0,0,.15); }
+  .sug div { padding: 8px 10px; border-bottom: 1px solid #eee; cursor: pointer; font-size: 13px; }
+  .sug div small { color: #777; display: block; }
+  .estado { display: none; margin-top: 8px; padding: 8px; border-radius: 5px; font-size: 12px; line-height: 1.4; }
+  .ok { background: #e8f5e9; } .error { background: #ffebee; } .info { background: #e3f2fd; } .warn { background: #fff8e1; }
+  .fila { display: flex; gap: 8px; } .fila > div { flex: 1; min-width: 0; }
+  .chk { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; }
+  .chk input { width: auto; }
+  .item { border: 1px solid #ddd; border-radius: 7px; padding: 8px; margin-top: 7px; background: #fafafa; font-size: 12px; line-height: 1.5; }
+  .item b { font-size: 13px; }
+  .promo { color: #2e7d32; font-weight: bold; }
+  .del { background: #eee; color: #b00020; padding: 5px; margin-top: 5px; }
+  .total { margin-top: 10px; padding: 10px; background: #f1f1f1; border-radius: 6px; font-size: 18px; font-weight: bold; text-align: right; }
+  .total small { display: block; font-size: 12px; font-weight: normal; color: #555; }
+  hr { border: 0; border-top: 1px solid #ddd; margin: 14px 0; }
+  .oculto { display: none; }
+  .tk { border: 2px solid #1976d2; border-radius: 8px; padding: 10px; margin-top: 12px; background: #f5faff; font-size: 13px; }
+  .tk pre { background: #fff; border: 1px solid #ddd; border-radius: 5px; padding: 8px; font-size: 12px; white-space: pre-wrap; margin: 6px 0; }
+  .b3 { display: flex; gap: 6px; } .b3 button { flex: 1; font-weight: bold; margin-top: 4px; }
+  .etq { border: 1px dashed #555; border-radius: 6px; padding: 8px; margin-top: 8px; background: #fff; }
+  .lote { font-family: monospace; font-size: 18px; font-weight: bold; letter-spacing: .5px; }
+  @media print { body * { visibility: hidden; } #panelEtiquetas, #panelEtiquetas * { visibility: visible; } #panelEtiquetas { position: absolute; left: 0; top: 0; width: 100%; border: 0; } .noimp { display: none !important; } }
+</style>
+</head>
+<body>
+<h2>🍝 Nueva venta</h2>
+
+<label for="concepto">Concepto</label>
+<select id="concepto">
+  <option value="Venta">Venta</option>
+  <option value="Ingreso al punto de venta">Ingreso al punto de venta</option>
+</select>
+
+<div id="bloqueCliente">
+  <h3>👤 Cliente</h3>
+  <label for="telefono">Teléfono (10 dígitos)</label>
+  <div class="rel">
+    <input id="telefono" type="text" inputmode="numeric" autocomplete="off" placeholder="Ej. 5512345678">
+    <div id="sugTel" class="sug"></div>
+  </div>
+  <div class="chk"><input id="sinTel" type="checkbox"><label for="sinTel" style="margin:0;font-weight:normal">Sin teléfono</label></div>
+
+  <label for="nombre">Nombre</label>
+  <div class="rel">
+    <input id="nombre" type="text" autocomplete="off" placeholder="Escribe para buscar o crear">
+    <div id="sugNom" class="sug"></div>
+  </div>
+
+  <div id="estadoCliente" class="estado"></div>
+
+  <label for="idCliente">ID Cliente</label>
+  <input id="idCliente" type="text" readonly placeholder="Se asigna al guardar">
+
+  <label for="direccion">Dirección</label>
+  <textarea id="direccion"></textarea>
+
+  <label for="correo">Correo (para el ticket, opcional)</label>
+  <input id="correo" type="email" placeholder="cliente@correo.com">
+
+  <label for="canal">Canal</label>
+  <select id="canal">
+    <option value="">Seleccionar...</option>
+    <option>Amigos</option><option>Familia</option><option>Social Orgánico</option>
+    <option>Social Paid</option><option>Otro</option><option>N/A</option>
+  </select>
+  <button class="sec" onclick="clienteNuevo()">🆕 Cliente nuevo / limpiar cliente</button>
+</div>
+
+<hr>
+<h3>🛒 Productos</h3>
+<label for="producto">Producto</label>
+<select id="producto"><option value="">Cargando...</option></select>
+
+<div class="fila">
+  <div><label for="cantidad">Cantidad</label><input id="cantidad" type="number" min="1" step="1" value="1"></div>
+  <div id="bloqueTipo"><label for="tipo">Precio</label>
+    <select id="tipo"><option value="">Automático</option><option value="Cortesía">Cortesía</option><option value="Manual">Manual</option></select></div>
+</div>
+<div id="bloqueManual" class="oculto"><label for="manual" id="lblManual">Precio manual por pieza ($)</label><input id="manual" type="number" min="0" step="1"></div>
+<button class="agregar" onclick="agregar()">➕ Agregar al carrito</button>
+
+<div id="bloqueIngreso" class="oculto">
+  <div class="fila">
+    <div><label for="fechaEntrada">Fecha de entrada</label><input id="fechaEntrada" type="date"></div>
+    <div><label for="lote">Nº de lote (sugerido)</label><input id="lote" type="text" placeholder="Se sugiere solo"></div>
+  </div>
+  <div id="infoCodigo" class="estado info"></div>
+  <button class="sec" onclick="alternarNuevo()">➕ Producto nuevo (código automático)</button>
+  <div id="bloqueNuevo" class="oculto">
+    <label for="nNombre">Nombre del producto nuevo</label><input id="nNombre" type="text">
+    <div class="fila">
+      <div><label for="nCat">Categoría</label>
+        <select id="nCat"><option value="">Elegir...</option><option>Pasta rellena</option><option>Pasta</option><option>Platillo</option><option>Salsa</option><option>Otro</option></select></div>
+      <div><label for="nPrecio">Precio lista ($)</label><input id="nPrecio" type="number" min="0" step="1" placeholder="0"></div>
+    </div>
+  </div>
+</div>
+
+<div id="carrito"></div>
+<div id="total" class="total">Total: $0.00</div>
+<div id="notaPromo" class="estado ok"></div>
+
+<div id="bloquePedido">
+  <hr>
+  <h3>📦 Datos del pedido</h3>
+  <div id="notaLead" class="estado ok" style="display:none"></div>
+  <div id="bloqueLead">
+    <div class="estado info" style="display:block">Cliente nuevo: ¿cómo llegó? (solo se pide en el primer registro del cliente)</div>
+    <div class="fila">
+      <div><label for="fuente">Fuente de captación</label><select id="fuente"><option value="">Seleccionar...</option></select></div>
+      <div><label for="plataforma">Plataforma</label><select id="plataforma"><option value="">Seleccionar...</option></select></div>
+    </div>
+    <label for="campana">Campaña (si viene de un anuncio)</label>
+    <input id="campana" type="text" placeholder="Opcional">
+  </div>
+  <label for="cp">C.P. de entrega</label>
+  <input id="cp" type="text" inputmode="numeric" maxlength="5" list="listaCP" placeholder="Ej. 04010">
+  <datalist id="listaCP"></datalist>
+  <div id="infoCP" class="estado info"></div>
+
+  <h3>🚚 Entrega</h3>
+  <label for="envioCliente">Envío a domicilio que PAGA EL CLIENTE ($) — pon 0 si no se cobra</label>
+  <input id="envioCliente" type="number" min="0" step="1" placeholder="Ej. 60" oninput="render()">
+  <div class="estado info" style="display:block">Este monto se suma al total del pedido y sale en el ticket. Lo pone quien vende, según la zona.</div>
+
+  <div class="fila">
+    <div><label for="costoEntrega">Costo de entrega para Bonta ($, interno)</label><input id="costoEntrega" type="number" min="0" step="1"></div>
+    <div><label for="comision">Comisión de cobro ($)</label><input id="comision" type="number" min="0" step="0.01"></div>
+  </div>
+  <div class="estado warn" style="display:block">«Costo de entrega» es lo que le cuesta a Bonta mandar el pedido. NO se cobra al cliente: para eso es el campo de arriba.</div>
+  <div id="bloqueDomicilio">
+    <label for="direccionEntrega">Dirección de entrega</label>
+    <textarea id="direccionEntrega"></textarea>
+    <label for="horaSalida">Hora de salida del repartidor</label>
+    <input id="horaSalida" type="datetime-local">
+    <div class="estado warn" style="display:block">⏰ 20 minutos antes de esta hora se manda un correo a logística con el pedido y el lote de cada producto.</div>
+    <label for="horaPrometida">Hora prometida de entrega al cliente (opcional)</label>
+    <input id="horaPrometida" type="datetime-local">
+  </div>
+  <div class="fila">
+    <div><label for="estadoPedido">Estado del pedido</label><select id="estadoPedido"></select></div>
+    <div><label for="estadoPago">Estado del pago</label><select id="estadoPago"></select></div>
+  </div>
+  <div id="bloqueMotivo" class="oculto"><label for="motivoCancelacion">Motivo de cancelación</label><select id="motivoCancelacion"></select></div>
+  <label for="incidencia">Incidencias</label>
+  <select id="incidencia"></select>
+</div>
+
+<label for="formaPago">Forma de pago</label>
+<select id="formaPago"><option value="">Cargando...</option></select>
+
+<div id="estado" class="estado"></div>
+<button class="guardar" id="btnGuardar" onclick="guardar()">💾 GUARDAR</button>
+<button class="sec" id="btnLimpiar" onclick="limpiarTodo()">↺ Limpiar todo</button>
+<div id="panelTicket" class="oculto tk"></div>
+<div id="panelEtiquetas" class="oculto tk"></div>
+
+<script src="bonta.js"></script>
+<script>
+var catalogo = [], combos = [], carrito = [], clienteSel = null, forzarNuevo = false, timer = null, cps = {};
+var $ = function (id) { return document.getElementById(id); };
+
+/* ---------- precio (misma regla que la hoja Movimientos) ---------- */
+function calcularCarrito(items, cat, combos) {
+  // Combo = una pasta + la salsa elegida a precio fijo (hoja Promociones). Misma regla que las hojas Pedidos y Líneas.
+  var por = {}; cat.forEach(function (p) { por[p.nombre] = p; });
+  var cb = {}; (combos || []).forEach(function (c) { cb[c.sku] = Number(c.precio) || 0; });
+  var qp = 0, sp = 0, qs = 0, ss = 0, sc = 0;
+  items.forEach(function (i) {
+    var p = por[i.producto]; if (!p || i.tipo === 'Cortesía' || i.tipo === 'Manual') return;
+    var q = Number(i.cantidad);
+    if ((p.categoria === 'Pasta rellena' || p.categoria === 'Pasta') && p.entraCombo) { qp += q; sp += q * p.lista; }
+    if (p.categoria === 'Salsa' && cb[p.codigo] > 0) { qs += q; ss += q * p.lista; sc += q * cb[p.codigo]; }
+  });
+  var pares = Math.min(qp, qs), desc = pares > 0 ? Math.max(0, pares * (sp / qp + ss / qs - sc / qs)) : 0;
+  var total = 0;
+  var lineas = items.map(function (i) {
+    var p = por[i.producto] || { lista: 0, categoria: '', codigo: '' }, q = Number(i.cantidad), t = 0, dq = 0;
+    if (i.tipo === 'Cortesía') t = 0;
+    else if (i.tipo === 'Manual') t = (Number(i.manual) || 0) * q;
+    else { t = q * p.lista; if (desc > 0 && p.categoria === 'Salsa' && cb[p.codigo] > 0) { dq = desc * q / qs; t -= dq; } }
+    total += t;
+    return { total: t, unit: q ? t / q : 0, desc: dq };
+  });
+  return { lineas: lineas, total: total, hayPromo: desc > 0, descuento: desc };
+}
+
+function llenar(id, lista, def) {
+  var s = $(id), prim = id === 'fuente' || id === 'plataforma' ? '<option value="">Seleccionar...</option>' : '';
+  s.innerHTML = prim;
+  (lista || []).forEach(function (x) { var o = document.createElement('option'); o.value = x; o.textContent = x; s.appendChild(o); });
+  if (def) s.value = def;
+}
+function infoCP() {
+  var v = $('cp').value.trim(), e = $('infoCP');
+  if (!v) { e.style.display = 'none'; return; }
+  e.style.display = 'block';
+  if (cps[v] !== undefined) { e.className = 'estado ok'; e.innerHTML = '✓ ' + esc(cps[v]); }
+  else { e.className = 'estado error'; e.innerHTML = '⚠️ Ese C.P. no está en la lista (hoja Listas). Puedes guardar, pero quedará «Fuera de lista».'; }
+}
+function dinero(n) { return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(n) || 0); }
+function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function msg(id, texto, tipo) { var e = $(id); e.style.display = 'block'; e.className = 'estado ' + tipo; e.innerHTML = texto; }
+function esIngreso() { return $('concepto').value === 'Ingreso al punto de venta'; }
+
+/* ---------- carga ---------- */
+document.addEventListener('DOMContentLoaded', function () {
+  $('cp').addEventListener('input', infoCP);
+  $('estadoPedido').addEventListener('change', actualizarMotivo);
+  $('producto').addEventListener('change', revisarServicio);
+  $('formaPago').addEventListener('change', function () { $('estadoPago').value = $('formaPago').value === 'Pendiente' ? 'Pendiente' : 'Pagado'; });
+  msg('estado', '⏳ Cargando listas...', 'info');
+  google.script.run.withSuccessHandler(function (d) {
+    catalogo = d.catalogo || []; combos = d.combos || [];
+    var s = $('producto'); s.innerHTML = '<option value="">Seleccionar producto...</option>';
+    var cats = {};
+    catalogo.forEach(function (p) { if (p.categoria === 'Servicio') return; /* el envío se captura en su propio campo */ (cats[p.categoria || 'Otros'] = cats[p.categoria || 'Otros'] || []).push(p); });
+    Object.keys(cats).forEach(function (c) {
+      var g = document.createElement('optgroup'); g.label = c;
+      cats[c].forEach(function (p) { var o = document.createElement('option'); o.value = p.nombre; o.textContent = p.nombre; g.appendChild(o); });
+      s.appendChild(g);
+    });
+    var f = $('formaPago'); f.innerHTML = '<option value="">Seleccionar forma de pago...</option>';
+    (d.formasPago || []).forEach(function (x) { var o = document.createElement('option'); o.value = x; o.textContent = x; f.appendChild(o); });
+    var L = d.listas || {};
+    llenar('fuente', L.fuentes, ''); llenar('plataforma', L.plataformas, '');
+    llenar('estadoPedido', L.estadosPedido, 'Confirmado'); llenar('estadoPago', L.estadosPago, 'Pagado');
+    llenar('incidencia', L.incidencias, 'Ninguna'); llenar('motivoCancelacion', L.motivos, '');
+    cps = {}; var dl = $('listaCP'); dl.innerHTML = '';
+    (L.cps || []).forEach(function (x) { cps[x.cp] = x.cobertura; var o = document.createElement('option'); o.value = x.cp; o.label = x.cobertura; dl.appendChild(o); });
+    msg('estado', '✓ Formulario listo.', 'ok');
+    render();
+  }).withFailureHandler(function (e) { msg('estado', '❌ ' + e.message, 'error'); }).obtenerDatosFormulario();
+});
+
+/* ---------- entrega, motivo y servicio (envío a domicilio) ---------- */
+function actualizarEntrega() { if (!$('direccionEntrega').value.trim()) $('direccionEntrega').value = $('direccion').value; }
+function actualizarMotivo() { $('bloqueMotivo').className = $('estadoPedido').value === 'Cancelado' ? '' : 'oculto'; }
+function esServicio(nombre) { var p = catalogo.filter(function (x) { return x.nombre === nombre; })[0]; return !!p && p.categoria === 'Servicio'; }
+function revisarServicio() {
+  var serv = !esIngreso() && esServicio($('producto').value);
+  $('tipo').disabled = serv;
+  if (serv) { $('tipo').value = 'Manual'; $('bloqueManual').className = ''; $('lblManual').textContent = 'Monto del envío ($) — se captura siempre y se puede editar'; $('manual').focus(); }
+  else { $('lblManual').textContent = 'Precio manual por pieza ($)'; if ($('tipo').value !== 'Manual') $('bloqueManual').className = 'oculto'; }
+}
+
+/* ---------- fuente del lead: solo en el primer registro del cliente ---------- */
+function actualizarLead() {
+  var nuevo = !clienteSel;
+  $('bloqueLead').className = nuevo ? '' : 'oculto';
+  var n = $('notaLead');
+  if (nuevo) { n.style.display = 'none'; }
+  else { n.style.display = 'block'; n.textContent = '✓ Cliente existente: el pedido entra como «Cliente recurrente». La fuente de captación solo se pide en el primer registro del cliente.'; }
+}
+
+/* ---------- cliente: autocompletado ---------- */
+function pintarSug(idCaja, lista, desdeTel) {
+  var caja = $(idCaja); caja.innerHTML = '';
+  if (!lista.length) { caja.style.display = 'none'; return; }
+  lista.forEach(function (c) {
+    var d = document.createElement('div');
+    d.innerHTML = '<b>' + esc(c.nombre) + '</b><small>' + esc(c.id) + ' · ' + esc(c.telefono || 'sin teléfono') + '</small>';
+    d.addEventListener('mousedown', function (ev) { ev.preventDefault(); elegir(c); });
+    caja.appendChild(d);
+  });
+  caja.style.display = 'block';
+}
+function buscarSug(texto, idCaja) {
+  clearTimeout(timer);
+  timer = setTimeout(function () {
+    google.script.run.withSuccessHandler(function (l) { pintarSug(idCaja, l || []); }).buscarClientes(texto);
+  }, 300);
+}
+function elegir(c) {
+  clienteSel = c; forzarNuevo = false;
+  $('telefono').value = c.telefono || ''; $('nombre').value = c.nombre; $('idCliente').value = c.id;
+  $('direccion').value = c.direccion || ''; $('correo').value = c.correo || ''; $('canal').value = c.canal || '';
+  $('cp').value = c.cp || ''; infoCP(); actualizarLead(); actualizarEntrega();
+  $('sinTel').checked = !c.telefono;
+  $('sugTel').style.display = 'none'; $('sugNom').style.display = 'none';
+  msg('estadoCliente', '✓ Cliente existente: ' + esc(c.nombre) + ' · ' + esc(c.id), 'ok');
+}
+function clienteNuevo() {
+  clienteSel = null; forzarNuevo = false;
+  ['telefono', 'nombre', 'idCliente', 'direccion', 'correo'].forEach(function (i) { $(i).value = ''; });
+  $('fuente').value = ''; $('plataforma').value = ''; $('campana').value = ''; actualizarLead();
+  $('canal').value = ''; $('sinTel').checked = false;
+  msg('estadoCliente', '🆕 Cliente nuevo: su ID se asigna al guardar.', 'info');
+}
+$('telefono').addEventListener('input', function () {
+  var d = this.value.replace(/\D/g, '');
+  if (d.length >= 3 && d.length < 10) buscarSug(d, 'sugTel'); else $('sugTel').style.display = 'none';
+  if (d.length === 10) {
+    google.script.run.withSuccessHandler(function (c) {
+      if (c) elegir(c); else if (!clienteSel) msg('estadoCliente', '🆕 Teléfono nuevo: se creará el cliente al guardar.', 'info');
+    }).buscarClientePorTelefono(d);
+  }
+});
+$('nombre').addEventListener('input', function () { if (this.value.trim().length >= 2) buscarSug(this.value, 'sugNom'); else $('sugNom').style.display = 'none'; });
+['telefono', 'nombre'].forEach(function (i) { $(i).addEventListener('blur', function () { setTimeout(function () { $('sugTel').style.display = 'none'; $('sugNom').style.display = 'none'; }, 200); }); });
+
+/* ---------- ingreso: lote, fecha de entrada, producto nuevo ---------- */
+var loteManual = false, infoProd = null, esNuevo = false;
+function hoyISO() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+function alternarNuevo() {
+  esNuevo = !esNuevo;
+  $('bloqueNuevo').className = esNuevo ? '' : 'oculto';
+  $('producto').disabled = esNuevo;
+  pedirLote();
+}
+function pedirLote() {
+  if (!esIngreso()) return;
+  var nombre = esNuevo ? $('nNombre').value.trim() : $('producto').value;
+  var cat = esNuevo ? $('nCat').value : '';
+  if (!nombre || (esNuevo && !cat)) { $('infoCodigo').style.display = 'none'; infoProd = null; return; }
+  google.script.run.withSuccessHandler(function (r) {
+    infoProd = r;
+    if (!loteManual) $('lote').value = r.lote;
+    msg('infoCodigo', (r.nuevo ? '🆕 Código nuevo: <b>' : 'Código: <b>') + esc(r.codigo) + '</b>', 'info');
+  }).withFailureHandler(function (e) { msg('infoCodigo', '❌ ' + e.message, 'error'); })
+    .sugerirLote(nombre, $('fechaEntrada').value, cat);
+}
+$('lote').addEventListener('input', function () { loteManual = true; });
+['producto', 'fechaEntrada', 'nCat'].forEach(function (i) { $(i).addEventListener('change', function () { loteManual = false; pedirLote(); }); });
+$('nNombre').addEventListener('change', function () { loteManual = false; pedirLote(); });
+
+/* ---------- carrito ---------- */
+$('tipo').addEventListener('change', function () { $('bloqueManual').className = this.value === 'Manual' ? '' : 'oculto'; });
+$('concepto').addEventListener('change', function () {
+  var ing = esIngreso();
+  $('bloqueCliente').className = ing ? 'oculto' : '';
+  $('bloqueTipo').className = ing ? 'oculto' : '';
+  $('bloqueManual').className = 'oculto'; $('tipo').value = '';
+  $('bloqueIngreso').className = ing ? '' : 'oculto'; $('bloquePedido').className = ing ? 'oculto' : '';
+  if (ing) { $('fechaEntrada').value = hoyISO(); loteManual = false; }
+  else { esNuevo = false; $('bloqueNuevo').className = 'oculto'; $('producto').disabled = false; }
+  carrito = []; render();
+});
+
+function agregarIngreso() {
+  var nombre = esNuevo ? $('nNombre').value.trim() : $('producto').value, q = Number($('cantidad').value);
+  if (!nombre) { msg('estado', esNuevo ? 'Escribe el nombre del producto nuevo.' : 'Selecciona un producto.', 'error'); return; }
+  if (esNuevo && !$('nCat').value) { msg('estado', 'Elige la categoría del producto nuevo.', 'error'); return; }
+  if (!(q > 0)) { msg('estado', 'La cantidad debe ser mayor a cero.', 'error'); return; }
+  if (!$('fechaEntrada').value) { msg('estado', 'Pon la fecha de entrada.', 'error'); return; }
+  if (!$('lote').value.trim()) { msg('estado', 'Falta el Nº de lote.', 'error'); return; }
+  carrito.push({ producto: nombre, cantidad: q, tipo: '', manual: '', lote: $('lote').value.trim(), fechaEntrada: $('fechaEntrada').value,
+                 codigo: infoProd ? infoProd.codigo : '', nuevo: esNuevo ? { categoria: $('nCat').value, precio: Number($('nPrecio').value) || 0 } : null });
+  $('producto').value = ''; $('cantidad').value = '1'; $('lote').value = ''; loteManual = false; infoProd = null;
+  $('infoCodigo').style.display = 'none'; $('nNombre').value = ''; $('nCat').value = ''; $('nPrecio').value = '';
+  if (esNuevo) alternarNuevo();
+  $('estado').style.display = 'none'; render();
+}
+
+function agregar() {
+  if (esIngreso()) { agregarIngreso(); return; }
+  var p = $('producto').value, q = Number($('cantidad').value), t = esIngreso() ? '' : $('tipo').value, m = $('manual').value;
+  if (!p) { msg('estado', 'Selecciona un producto.', 'error'); return; }
+  if (!(q > 0)) { msg('estado', 'La cantidad debe ser mayor a cero.', 'error'); return; }
+  if (t === 'Manual' && !(Number(m) >= 0 && m !== '')) { msg('estado', 'Pon el precio manual.', 'error'); return; }
+  carrito.push({ producto: p, cantidad: q, tipo: t, manual: t === 'Manual' ? Number(m) : '' });
+  $('producto').value = ''; $('cantidad').value = '1'; $('tipo').value = ''; $('tipo').disabled = false; $('manual').value = ''; $('bloqueManual').className = 'oculto'; $('lblManual').textContent = 'Precio manual por pieza ($)';
+  $('estado').style.display = 'none'; render();
+}
+function quitar(i) { carrito.splice(i, 1); render(); }
+
+/* envío que paga el cliente (campo propio): se vuelve la línea «Envío a domicilio» al guardar */
+function envioCampo() { var v = $('envioCliente').value; return v === '' ? '' : Number(v); }
+
+function render() {
+  var c = $('carrito'); c.innerHTML = '';
+  var r = calcularCarrito(carrito, catalogo, combos), ing = esIngreso();
+  carrito.forEach(function (it, i) {
+    var l = r.lineas[i], d = document.createElement('div'); d.className = 'item';
+    var det = 'Cantidad: ' + it.cantidad;
+    if (ing) {
+      det += '<br>Lote: <b>' + esc(it.lote) + '</b> · Entrada: ' + esc(it.fechaEntrada.split('-').reverse().join('/'));
+      det += '<br>Código: ' + esc(it.codigo || '—') + (it.nuevo ? ' <span class="promo">(producto nuevo · ' + esc(it.nuevo.categoria) + ' · ' + dinero(it.nuevo.precio) + ')</span>' : '');
+    }
+    if (!ing) {
+      det += ' · ' + (it.tipo === 'Cortesía' ? 'Cortesía' : it.tipo === 'Manual' ? 'Precio manual' : 'Precio automático');
+      det += '<br>Precio: ' + dinero(l.unit) + ' · <b>Subtotal: ' + dinero(l.total) + '</b>';
+      if (l.desc > 0) det += '<br><span class="promo">🎉 Precio de combo (descuento ' + dinero(l.desc) + ')</span>';
+    }
+    d.innerHTML = '<b>' + esc(it.producto) + '</b><br>' + det + '<button class="del" onclick="quitar(' + i + ')">✕ Quitar</button>';
+    c.appendChild(d);
+  });
+  var envio = ing ? 0 : (Number($('envioCliente').value) || 0);
+  $('total').style.display = ing ? 'none' : 'block';
+  if (envio > 0) {
+    $('total').innerHTML = '<small>Productos: ' + dinero(r.total) + '</small><small>🛵 Envío a domicilio: ' + dinero(envio) + '</small>Total a cobrar: ' + dinero(r.total + envio);
+  } else {
+    $('total').textContent = 'Total: ' + dinero(r.total);
+  }
+  var n = $('notaPromo');
+  if (!ing && r.hayPromo) { n.style.display = 'block'; n.textContent = '🎉 Combo pasta + salsa aplicado (ahorro ' + dinero(r.descuento) + ').'; } else n.style.display = 'none';
+}
+
+/* ---------- guardar ---------- */
+function guardar() {
+  var ing = esIngreso();
+  var datos = {
+    concepto: $('concepto').value, telefono: $('telefono').value, sinTelefono: $('sinTel').checked,
+    nombre: $('nombre').value, idExistente: clienteSel ? clienteSel.id : '', direccion: $('direccion').value,
+    canal: $('canal').value, formaPago: $('formaPago').value, carrito: carrito, forzarNuevo: forzarNuevo,
+    cp: $('cp').value.trim(), fuente: $('fuente').value, plataforma: $('plataforma').value, campana: $('campana').value,
+    costoEntrega: $('costoEntrega').value, comision: $('comision').value, horaPrometida: $('horaPrometida').value,
+    estadoPedido: $('estadoPedido').value, estadoPago: $('estadoPago').value,
+    horaSalida: $('horaSalida').value, correo: $('correo').value.trim(), direccionEntrega: $('direccionEntrega').value.trim(),
+    incidencia: $('incidencia').value, motivoCancelacion: $('motivoCancelacion').value
+  };
+  if (!carrito.length) { msg('estado', 'Agrega al menos un producto.', 'error'); return; }
+  if (!ing && !datos.formaPago) { msg('estado', 'Selecciona la forma de pago.', 'error'); return; }
+  if (ing && !datos.formaPago) datos.formaPago = 'N/A';
+  if (!ing && !clienteSel && !datos.fuente) { msg('estado', 'Cliente nuevo: elige la fuente de captación (si no se sabe, «Sin identificar»).', 'error'); return; }
+  if (!ing && !clienteSel && !datos.plataforma) { msg('estado', 'Cliente nuevo: elige la plataforma.', 'error'); return; }
+  if (!ing) {                                                   // todos los pedidos van a domicilio
+    if (!(datos.direccionEntrega || datos.direccion.trim())) { msg('estado', 'Falta la dirección de entrega.', 'error'); return; }
+    if (datos.estadoPedido !== 'Entregado' && datos.estadoPedido !== 'Cancelado' && !datos.horaSalida) { msg('estado', 'Pon la hora de salida del repartidor: con ella se manda el recordatorio a logística 20 minutos antes.', 'error'); return; }
+  }
+  /* envío que paga el cliente: se agrega como línea «Envío a domicilio» (Servicio, precio manual) */
+  var items = carrito.slice();
+  if (!ing) {
+    var envio = envioCampo();
+    var yaTieneEnvio = carrito.some(function (i) { return esServicio(i.producto); });
+    if (yaTieneEnvio && envio > 0) { msg('estado', 'Ya agregaste el envío al carrito Y escribiste un monto en «Envío que paga el cliente». Deja ese campo en 0 o quita la línea del carrito.', 'error'); return; }
+    if (!yaTieneEnvio && envio === '') { msg('estado', 'Captura el «Envío a domicilio que paga el cliente» (pon 0 si no se cobra).', 'error'); return; }
+    if (!yaTieneEnvio && !(envio >= 0)) { msg('estado', 'El monto del envío no es válido.', 'error'); return; }
+    if (!yaTieneEnvio && envio > 0) {
+      var serv = catalogo.filter(function (p) { return p.categoria === 'Servicio'; })[0];
+      if (!serv) { msg('estado', 'No encuentro el producto «Envío a domicilio» en el Catálogo (categoría Servicio y En venta = Sí).', 'error'); return; }
+      items.push({ producto: serv.nombre, cantidad: 1, tipo: 'Manual', manual: envio });
+    }
+  }
+  datos.carrito = items;
+  var previo = calcularCarrito(items, catalogo, combos).total;
+  $('btnGuardar').disabled = true; msg('estado', '💾 Guardando...', 'info');
+  google.script.run.withSuccessHandler(function (r) {
+    $('btnGuardar').disabled = false;
+    var t = '✓ ' + r.mensaje + '<br>Cliente: ' + esc(r.idCliente) + (r.nuevoCliente ? ' (nuevo)' : '') + '<br>Líneas: ' + r.lineas + (r.idPedido ? '<br>Pedido: ' + esc(r.idPedido) : '') + (r.aviso ? '<br>⚠️ ' + esc(r.aviso) : '');
+    if (!ing) {
+      t += '<br>Total: ' + dinero(r.totalHoja || previo);
+      if (r.totalHoja !== null && Math.abs(r.totalHoja - previo) > 0.5) {
+        t += '<br>⚠️ La hoja calculó ' + dinero(r.totalHoja) + ' y el formulario ' + dinero(previo) + '. Revisa el pedido en Movimientos.';
+      }
+    }
+    msg('estado', t, 'ok');
+    if (!ing && r.ticket) iniciarTicket(r);
+    else if (ing && r.etiquetas && r.etiquetas.length) mostrarEtiquetas(r.etiquetas);
+    else setTimeout(limpiarTodo, 4500);
+  }).withFailureHandler(function (e) {
+    $('btnGuardar').disabled = false;
+    var m = String(e.message || '');
+    var k = m.indexOf('DUPLICADO|');
+    if (k !== -1) {
+      var p = m.slice(k).split('|');   // DUPLICADO|id|nombre|telefono
+      if (confirm('Ya existe ' + p[2] + ' (' + p[1] + (p[3] ? ', ' + p[3] : ', sin teléfono') + ').\n\n¿Es el mismo cliente?\nAceptar = usar ese cliente. Cancelar = guardar como cliente nuevo.')) {
+        elegir({ id: p[1], nombre: p[2], telefono: p[3] || '', direccion: $('direccion').value, canal: $('canal').value });
+        msg('estado', 'Cliente seleccionado. Vuelve a presionar GUARDAR.', 'info');
+      } else { forzarNuevo = true; msg('estado', 'Se guardará como cliente nuevo. Presiona GUARDAR.', 'info'); }
+      return;
+    }
+    msg('estado', '❌ ' + m, 'error');
+  }).guardarVenta(datos);
+}
+
+/* ---------- etiquetas de lote (después de un ingreso) ---------- */
+function mostrarEtiquetas(lista) {
+  $('btnGuardar').disabled = true;
+  var p = $('panelEtiquetas'); p.className = 'tk';
+  p.innerHTML = '<b>🏷️ Anota este lote en la etiqueta de cada producto</b>' + lista.map(function (e) {
+    return '<div class="etq"><div class="lote">' + esc(e.lote) + '</div>' + esc(e.producto) + '<br>Entrada: ' + esc(e.fecha) + ' · Cantidad: ' + e.cantidad + ' · Código: ' + esc(e.codigo) + '</div>';
+  }).join('') + '<button class="agregar noimp" onclick="window.print()">🖨️ Imprimir etiquetas</button>' +
+    '<button class="sec noimp" onclick="limpiarTodo()">✔ Listo, nuevo registro</button>';
+}
+
+/* ---------- ticket: preguntar, confirmar y enviar ---------- */
+var tk = null;
+function iniciarTicket(r) {
+  tk = { id: r.idPedido, texto: r.ticket.texto, telefono: r.telefono || '', correo: r.correo || '', eleccion: '' };
+  $('btnGuardar').disabled = true; $('btnLimpiar').disabled = true;
+  pintarPregunta();
+}
+function pintarPregunta() {
+  $('panelTicket').className = 'tk';
+  $('panelTicket').innerHTML = '<b>🧾 Ticket de ' + esc(tk.id) + '</b><pre>' + esc(tk.texto) + '</pre>' +
+    '<b>Pregúntale al cliente: ¿quiere su ticket?</b>' +
+    '<div class="b3"><button class="agregar" onclick="elegirTicket(\'WhatsApp\')">💬 WhatsApp</button><button class="agregar" onclick="elegirTicket(\'Correo\')">✉️ Correo</button><button class="sec" onclick="elegirTicket(\'No quiso\')">🚫 No, gracias</button></div>';
+}
+function elegirTicket(op) {
+  tk.eleccion = op;
+  var txt = op === 'No quiso' ? 'NO quiere ticket' : 'quiere su ticket por <b>' + op + '</b>';
+  $('panelTicket').innerHTML = '<b>Confirma con el cliente</b><div style="margin:8px 0">El cliente ' + txt + '. ¿Es correcto?</div>' +
+    '<button class="guardar" onclick="confirmarTicket()">✔ Sí, el cliente lo confirmó</button><button class="sec" onclick="pintarPregunta()">↩ Cambiar respuesta</button>';
+}
+function errorTicket(e) { msg('estado', '❌ ' + (e.message || e), 'error'); }
+function confirmarTicket() {
+  google.script.run.withSuccessHandler(function () {
+    if (tk.eleccion === 'No quiso') terminarTicket('Listo: el cliente no quiso ticket (quedó registrado).');
+    else if (tk.eleccion === 'Correo') pintarCorreo(); else pintarWhatsApp();
+  }).withFailureHandler(errorTicket).registrarEleccionTicket(tk.id, tk.eleccion);
+}
+function pintarCorreo() {
+  $('panelTicket').innerHTML = '<b>✉️ Enviar ticket por correo</b><label for="tkCorreo">Correo del cliente</label><input id="tkCorreo" type="email" value="' + esc(tk.correo) + '" placeholder="cliente@correo.com">' +
+    '<button class="guardar" id="btnTk" onclick="enviarCorreoTicket()">Enviar ticket</button>';
+}
+function enviarCorreoTicket() {
+  $('btnTk').disabled = true;
+  google.script.run.withSuccessHandler(function (r) { terminarTicket('✓ ' + r.mensaje); })
+    .withFailureHandler(function (e) { $('btnTk').disabled = false; errorTicket(e); }).enviarTicketCorreo(tk.id, $('tkCorreo').value.trim());
+}
+function pintarWhatsApp() {
+  $('panelTicket').innerHTML = '<b>💬 Enviar ticket por WhatsApp</b><label for="tkTel">Teléfono del cliente (10 dígitos)</label><input id="tkTel" type="text" inputmode="numeric" value="' + esc(tk.telefono) + '" oninput="armarWhatsApp()">' +
+    '<a id="tkLink" class="oculto" target="_blank" onclick="enlaceWhatsAppUsado()"><button class="guardar" type="button">Abrir WhatsApp con el ticket</button></a>' +
+    '<div class="estado info" style="display:block">WhatsApp se abre con el mensaje ya escrito; tú solo presionas «enviar».</div>';
+  armarWhatsApp();
+}
+function armarWhatsApp() {
+  var d = $('tkTel').value.replace(/\D/g, ''), a = $('tkLink');
+  if (d.length === 10) { a.href = 'https://wa.me/52' + d + '?text=' + encodeURIComponent(tk.texto.replace(/\*/g, '*')); a.className = ''; } else a.className = 'oculto';
+}
+function enlaceWhatsAppUsado() {
+  google.script.run.withSuccessHandler(function () { terminarTicket('✓ Ticket abierto en WhatsApp. Confirma que se envió el mensaje.'); }).withFailureHandler(errorTicket).marcarTicketWhatsApp(tk.id);
+}
+function terminarTicket(texto) {
+  $('panelTicket').innerHTML = '<div class="estado ok" style="display:block">' + esc(texto) + '</div><button class="guardar" onclick="limpiarTodo()">🧾 Nueva venta</button>';
+  $('btnLimpiar').disabled = false;
+}
+
+function limpiarTodo() {
+  $('concepto').value = 'Venta'; $('bloqueCliente').className = ''; $('bloqueTipo').className = '';
+  clienteNuevo(); $('estadoCliente').style.display = 'none';
+  $('producto').value = ''; $('cantidad').value = '1'; $('tipo').value = ''; $('manual').value = ''; $('bloqueManual').className = 'oculto';
+  $('formaPago').value = ''; carrito = []; $('estado').style.display = 'none';
+  $('bloquePedido').className = ''; $('fuente').value = ''; $('plataforma').value = ''; $('campana').value = ''; $('cp').value = ''; $('infoCP').style.display = 'none';
+  $('envioCliente').value = '';
+  $('costoEntrega').value = ''; $('comision').value = ''; $('horaPrometida').value = ''; $('horaSalida').value = ''; $('estadoPedido').value = 'Confirmado'; $('estadoPago').value = 'Pagado';
+  $('direccionEntrega').value = ''; $('incidencia').value = 'Ninguna'; $('motivoCancelacion').value = ''; $('bloqueMotivo').className = 'oculto';
+  $('tipo').disabled = false; $('lblManual').textContent = 'Precio manual por pieza ($)'; tk = null; actualizarLead();
+  $('panelTicket').className = 'oculto tk'; $('panelEtiquetas').className = 'oculto tk'; $('btnGuardar').disabled = false; $('btnLimpiar').disabled = false;
+  $('bloqueIngreso').className = 'oculto'; esNuevo = false; $('bloqueNuevo').className = 'oculto'; $('producto').disabled = false; loteManual = false; render();
+}
+</script>
+</body>
+</html>

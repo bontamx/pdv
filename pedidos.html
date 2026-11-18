@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Pedidos · Bonta</title>
+<base target="_top">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; padding: 12px; margin: 0; color: #222; font-size: 14px; background: #fafafa; }
+  h2 { margin: 0 0 10px; font-size: 18px; }
+  button { border: 0; border-radius: 8px; cursor: pointer; font-size: 14px; padding: 11px 12px; font-weight: bold; }
+  .card { background: #fff; border: 1px solid #ddd; border-radius: 12px; padding: 12px; margin-top: 10px; }
+  .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .id { font-weight: bold; font-size: 15px; } .tot { font-weight: bold; font-size: 16px; }
+  .sub { color: #555; font-size: 12px; margin-top: 4px; line-height: 1.45; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; margin-right: 4px; }
+  .e-Pendiente, .e-Confirmado { background: #fff8e1; color: #8a6d00; } .e-En { background: #e3f2fd; color: #0d47a1; }
+  .e-Entregado { background: #e8f5e9; color: #1b5e20; } .e-Cancelado { background: #ffebee; color: #b00020; }
+  .p-Pagado { background: #e8f5e9; color: #1b5e20; } .p-Pendiente { background: #ffebee; color: #b00020; } .p-Reembolsado { background: #eee; color: #555; }
+  .acc { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; } .acc button { flex: 1; min-width: 30%; }
+  .azul { background: #1976d2; color: #fff; } .verde { background: #2e7d32; color: #fff; } .ambar { background: #f9a825; color: #222; } .gris { background: #eee; color: #222; width: 100%; }
+  .estado { display: none; padding: 9px; border-radius: 6px; font-size: 12px; margin-top: 8px; }
+  .ok { background: #e8f5e9; } .error { background: #ffebee; } .info { background: #e3f2fd; }
+</style>
+</head>
+<body>
+<h2>📋 Pedidos por entregar</h2>
+<button class="gris" onclick="cargar()">🔄 Actualizar</button>
+<div id="msg" class="estado"></div>
+<div id="lista"></div>
+<script src="bonta.js"></script>
+<script>
+var $ = function (id) { return document.getElementById(id); };
+var appUrl = '';
+function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function dinero(n) { return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(n) || 0); }
+function msg(t, tipo) { var e = $('msg'); e.style.display = 'block'; e.className = 'estado ' + tipo; e.innerHTML = t; }
+function cargar() {
+  msg('⏳ Cargando...', 'info');
+  google.script.run.withSuccessHandler(function (d) {
+    appUrl = d.url; $('msg').style.display = 'none'; pintar(d.pedidos);
+  }).withFailureHandler(function (e) { msg('❌ ' + esc(e.message), 'error'); }).listarPedidosApp();
+}
+function pintar(ps) {
+  var l = $('lista');
+  if (!ps.length) { l.innerHTML = '<div class="card">No hay pedidos por entregar. 🎉</div>'; return; }
+  l.innerHTML = ps.map(function (p) {
+    var activo = ['Pendiente', 'Confirmado', 'En preparación', 'En ruta'].indexOf(p.estado) !== -1;
+    var botones = '';
+    if (activo) {
+      if (p.estado !== 'En ruta') botones += '<button class="azul" onclick="estado(\'' + p.id + '\',\'En ruta\')">🛵 En ruta</button>';
+      botones += '<button class="verde" onclick="estado(\'' + p.id + '\',\'Entregado\')">✅ Entregado</button>';
+    }
+    if (p.pago === 'Pendiente' && p.estado !== 'Cancelado') botones += '<button class="ambar" onclick="pagar(\'' + p.id + '\')">💲 Pagado</button>';
+    if (activo) botones += '<button class="gris" onclick="irCancelar()">❌ Cancelar…</button>';
+    return '<div class="card"><div class="top"><span class="id">' + esc(p.id) + ' · ' + esc(p.cliente) + '</span><span class="tot">' + dinero(p.total) + '</span></div>' +
+      '<div class="sub"><span class="pill e-' + esc(p.estado.split(' ')[0]) + '">' + esc(p.estado) + '</span><span class="pill p-' + esc(p.pago) + '">' + esc(p.pago || '—') + '</span>' +
+      (p.salida ? '<br>🕒 Sale: ' + esc(p.salida) : '') + (p.recordatorio ? ' · ✉️ recordatorio enviado' : '') +
+      (p.direccion ? '<br>📍 ' + esc(p.direccion) : '') + (p.productos ? '<br>🛒 ' + esc(p.productos) : '') + '</div>' +
+      (botones ? '<div class="acc">' + botones + '</div>' : '') + '</div>';
+  }).join('');
+}
+function estado(id, nuevo) {
+  if (nuevo === 'Entregado' && !confirm('¿Marcar ' + id + ' como ENTREGADO?')) return;
+  msg('⏳ Guardando...', 'info');
+  google.script.run.withSuccessHandler(function (r) { msg('✓ ' + esc(r.mensaje), 'ok'); cargar(); })
+    .withFailureHandler(function (e) { msg('❌ ' + esc(e.message), 'error'); }).cambiarEstadoApp(id, nuevo);
+}
+function pagar(id) {
+  if (!confirm('¿Marcar ' + id + ' como PAGADO?')) return;
+  msg('⏳ Guardando...', 'info');
+  google.script.run.withSuccessHandler(function (r) { msg('✓ ' + esc(r.mensaje), 'ok'); cargar(); })
+    .withFailureHandler(function (e) { msg('❌ ' + esc(e.message), 'error'); }).marcarPagadoApp(id);
+}
+function irCancelar() { location.href = 'cancelar.html'; }
+cargar();
+setInterval(cargar, 120000);
+</script>
+</body>
+</html>

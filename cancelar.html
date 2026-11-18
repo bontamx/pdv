@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Cancelar · Bonta</title>
+<base target="_top">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; padding: 12px; margin: 0; color: #222; font-size: 14px; }
+  h3 { margin: 14px 0 6px; font-size: 14px; }
+  label { display: block; font-size: 12px; font-weight: bold; margin: 10px 0 4px; }
+  select { width: 100%; padding: 9px; border: 1px solid #ccc; border-radius: 5px; font-size: 14px; background: #fff; }
+  button { width: 100%; padding: 11px; border: 0; border-radius: 6px; cursor: pointer; font-size: 14px; margin-top: 10px; font-weight: bold; }
+  .rojo { background: #b00020; color: #fff; } .gris { background: #eee; color: #222; }
+  .estado { display: none; margin-top: 10px; padding: 9px; border-radius: 5px; font-size: 12px; line-height: 1.45; }
+  .ok { background: #e8f5e9; } .error { background: #ffebee; } .info { background: #e3f2fd; } .warn { background: #fff8e1; }
+  .opc { display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid #ddd; border-radius: 6px; margin-top: 6px; font-size: 13px; }
+  .opc input { width: auto; }
+  .oculto { display: none; }
+  .resumen { background: #f5f5f5; border-radius: 6px; padding: 8px; font-size: 12px; margin-top: 8px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<h3>❌ Cancelar pedido o producto</h3>
+<div id="msgCarga" class="estado info" style="display:block">⏳ Cargando pedidos...</div>
+
+<div id="paso1" class="oculto">
+  <label for="pedido">Pedido (solo los que no están Entregados ni Cancelados)</label>
+  <select id="pedido"><option value="">Selecciona un pedido...</option></select>
+  <div id="resumen" class="resumen oculto"></div>
+
+  <h3>¿Qué se cancela?</h3>
+  <label class="opc"><input type="radio" name="modo" value="pedido" checked> Todo el pedido</label>
+  <label class="opc"><input type="radio" name="modo" value="productos"> Solo algunos productos</label>
+  <div id="lineas" class="oculto"></div>
+
+  <label for="motivo">Motivo</label>
+  <select id="motivo"><option value="">Selecciona...</option></select>
+
+  <div id="bloqueReembolso" class="oculto">
+    <label for="reembolso">El pedido ya estaba pagado: ¿se devuelve el dinero?</label>
+    <select id="reembolso"><option value="no">No (se queda como Pagado)</option><option value="si">Sí, reembolsado</option></select>
+  </div>
+
+  <div class="estado warn" style="display:block">Esto devuelve las piezas al inventario y a su lote, y deja el registro en la hoja «Cancelaciones». No se puede deshacer desde aquí.</div>
+  <button class="rojo" id="btn" onclick="confirmar()">Cancelar</button>
+  <button class="gris" onclick="google.script.host.close()">Cerrar</button>
+</div>
+<div id="res" class="estado"></div>
+
+<script src="bonta.js"></script>
+<script>
+var $ = function (id) { return document.getElementById(id); };
+var datos = { pedidos: [], motivos: [] };
+function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function dinero(n) { return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(n) || 0); }
+function msg(id, t, tipo) { var e = $(id); e.style.display = 'block'; e.className = 'estado ' + tipo; e.innerHTML = t; }
+function modo() { return document.querySelector('input[name=modo]:checked').value; }
+
+function cargar() {
+  google.script.run.withSuccessHandler(function (d) {
+    datos = d; $('msgCarga').style.display = 'none'; $('paso1').className = '';
+    var s = $('pedido'); s.innerHTML = '<option value="">Selecciona un pedido...</option>';
+    d.pedidos.forEach(function (p, i) {
+      var o = document.createElement('option'); o.value = i;
+      o.textContent = p.id + ' · ' + p.dia + ' · ' + p.cliente + ' · ' + p.estado + ' · ' + dinero(p.total);
+      s.appendChild(o);
+    });
+    var m = $('motivo'); m.innerHTML = '<option value="">Selecciona...</option>';
+    d.motivos.forEach(function (x) { var o = document.createElement('option'); o.value = x; o.textContent = x; m.appendChild(o); });
+    if (!d.pedidos.length) msg('msgCarga', 'No hay pedidos que se puedan cancelar.', 'info');
+  }).withFailureHandler(function (e) { msg('msgCarga', '❌ ' + esc(e.message), 'error'); }).listarPedidosCancelables();
+}
+function pedidoSel() { var v = $('pedido').value; return v === '' ? null : datos.pedidos[Number(v)]; }
+
+function pintar() {
+  var p = pedidoSel(), r = $('resumen'), l = $('lineas');
+  if (!p) { r.className = 'resumen oculto'; l.className = 'oculto'; $('bloqueReembolso').className = 'oculto'; return; }
+  r.className = 'resumen';
+  r.innerHTML = '<b>' + esc(p.id) + '</b> · ' + esc(p.cliente) + '<br>Estado: ' + esc(p.estado) + ' · Pago: ' + esc(p.pago) + ' · Total: ' + dinero(p.total);
+  $('bloqueReembolso').className = p.pago === 'Pagado' ? '' : 'oculto';
+  l.innerHTML = p.lineas.map(function (x) {
+    return '<label class="opc"><input type="checkbox" class="chk" value="' + x.fila + '"> ' + esc(x.producto) + ' × ' + x.cantidad + ' (' + dinero(x.importe) + ')' + (x.servicio ? ' · envío' : '') + '</label>';
+  }).join('');
+  l.className = modo() === 'productos' ? '' : 'oculto';
+}
+$('pedido').addEventListener('change', pintar);
+Array.prototype.forEach.call(document.getElementsByName('modo'), function (r) { r.addEventListener('change', pintar); });
+
+function confirmar() {
+  var p = pedidoSel();
+  if (!p) { msg('res', 'Selecciona un pedido.', 'error'); return; }
+  if (!$('motivo').value) { msg('res', 'Elige el motivo.', 'error'); return; }
+  var filas = [];
+  Array.prototype.forEach.call(document.querySelectorAll('.chk'), function (c) { if (c.checked) filas.push(Number(c.value)); });
+  if (modo() === 'productos' && !filas.length) { msg('res', 'Marca al menos un producto.', 'error'); return; }
+  var que = modo() === 'pedido' ? 'TODO el pedido ' + p.id : filas.length + ' producto(s) del pedido ' + p.id;
+  if (!confirm('¿Seguro que quieres cancelar ' + que + '?\nMotivo: ' + $('motivo').value)) return;
+  $('btn').disabled = true; msg('res', '⏳ Cancelando...', 'info');
+  google.script.run.withSuccessHandler(function (r) {
+    $('btn').disabled = false;
+    var t = '✓ ' + esc(r.mensaje) + (r.lotes ? '<br>Se devolvieron ' + r.lotes + ' asignación(es) de lote.' : '');
+    (r.avisos || []).forEach(function (a) { t += '<br>⚠️ ' + esc(a); });
+    msg('res', t, 'ok'); cargar(); $('resumen').className = 'resumen oculto'; $('lineas').className = 'oculto';
+  }).withFailureHandler(function (e) { $('btn').disabled = false; msg('res', '❌ ' + esc(e.message), 'error'); })
+    .cancelarPedido({ id: p.id, modo: modo(), filas: filas, motivo: $('motivo').value, reembolso: $('reembolso').value === 'si' });
+}
+cargar();
+</script>
+</body>
+</html>
