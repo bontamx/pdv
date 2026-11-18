@@ -155,7 +155,7 @@ function irAInicio() {
     a.textContent = m; b.textContent = estado.permisos[m]; tr.appendChild(a); tr.appendChild(b); t.appendChild(tr);
   });
   var m = $('iMenu'); m.innerHTML = '';
-  [['venta.html', '🧾 Nueva venta', 'Ventas', 2, '#1976d2'], ['pedidos.html', '📋 Pedidos por entregar', 'Pedidos', 1, '#2e7d32'], ['cancelar.html', '❌ Cancelar pedido o producto', 'Cancelaciones', 3, '#b00020']].forEach(function (x) {
+  [['venta.html', '🧾 Nueva venta', 'Ventas', 2, '#1976d2'], ['pedidos.html', '📋 Pedidos por entregar', 'Pedidos', 1, '#2e7d32'], ['cancelar.html', '❌ Cancelar pedido o producto', 'Cancelaciones', 3, '#b00020'], ['usuarios.html', '👥 Usuarios y permisos', 'Usuarios y permisos', 4, '#555555']].forEach(function (x) {
     if ((estado.permisos[x[2]] || 0) < x[3]) return;
     var a = document.createElement('a'); a.href = x[0]; a.textContent = x[1];
     a.style.cssText = 'display:block;background:' + x[4] + ';color:#fff;text-decoration:none;border-radius:12px;padding:18px 14px;margin-top:12px;font-size:18px;font-weight:bold;text-align:center';
