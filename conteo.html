@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<!--
+*********************************************************************************
+ PARA:    GitHub Pages (el repositorio de la app). NO es de Google Sheets ni de Apps Script.
+ ACCIÓN:  INSTALAR NUEVO: en GitHub, Add file > Create new file, nombre exacto  conteo.html
+          (en minúsculas, en la raíz junto a index.html). Pega todo esto y Commit changes.
+ REQUIERE (en este orden, antes de subir esta pantalla):
+          1) En el Apps Script del PDV: Conteo27.gs INSTALADO y Api26.gs ACTUALIZADO (versión del conteo),
+             y luego Implementar > Administrar implementaciones > lápiz de la API > Nueva versión.
+          2) En GitHub: bonta.js ya existe y el index.html nuevo (trae el botón «Conteo físico»).
+ QUÉ HACE: Conteo físico del producto terminado. Escribes lo que contaste; el sistema calcula la
+          diferencia contra el Inventario PDV. Diferencias chicas se aplican solas; las grandes
+          esperan aprobación de quien tenga nivel 4 en Inventario.
+ PERMISOS: Inventario nivel 2 para contar; nivel 4 para aprobar o rechazar (lo revisa el servidor).
+*********************************************************************************
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conteo físico · Bonta</title>
+<script src="bonta.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; padding: 12px; margin: 0; color: #222; font-size: 15px; background: #fafafa; }
+  h2 { font-size: 19px; margin: 6px 0 8px; } h3 { font-size: 15px; margin: 18px 0 6px; }
+  .nota { background: #e3f2fd; color: #0d3c7a; border-radius: 8px; padding: 10px; font-size: 13px; line-height: 1.45; }
+  input, select { width: 100%; padding: 11px; border: 1px solid #bbb; border-radius: 8px; font-size: 16px; background: #fff; }
+  button { border: 0; border-radius: 9px; cursor: pointer; font-size: 15px; font-weight: bold; padding: 13px; }
+  .principal { background: #6a1b9a; color: #fff; width: 100%; margin-top: 14px; } .gris { background: #eee; color: #222; }
+  .verde { background: #e8f5e9; color: #1b5e20; } .rojo { background: #ffebee; color: #b00020; }
+  .card { background: #fff; border: 1px solid #ddd; border-radius: 12px; padding: 12px; margin-top: 10px; }
+  .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .nom { font-weight: bold; } .sub { color: #666; font-size: 12px; margin: 3px 0 8px; line-height: 1.4; }
+  .warn { color: #8a6d00; font-weight: bold; }
+  .dif { font-weight: bold; font-size: 14px; margin-top: 6px; } .pos { color: #1b5e20; } .neg { color: #b00020; } .cero { color: #555; }
+  .extra { display: none; margin-top: 8px; }
+  .aviso { display: none; margin-top: 12px; padding: 10px; border-radius: 8px; font-size: 13px; line-height: 1.45; }
+  .error { background: #ffebee; color: #7f0020; } .ok { background: #e8f5e9; color: #1b5e20; } .info { background: #e3f2fd; color: #0d3c7a; }
+  .acc { display: flex; gap: 8px; margin-top: 10px; } .acc button { flex: 1; }
+</style>
+</head>
+<body>
+<h2>📦 Conteo físico (producto terminado)</h2>
+<div class="nota">Cuenta lo que hay en el congelador y escríbelo. <b>Captura solo los productos que contaste.</b>
+  Diferencias de hasta <span id="umbral">2</span> piezas se aplican solas; las mayores esperan aprobación.</div>
+<div id="aviso" class="aviso"></div>
+
+<div id="bloquePend" style="display:none"><h3>⏳ Pendientes de aprobación</h3><div id="pend"></div></div>
+
+<h3>Productos</h3>
+<input id="filtro" type="search" placeholder="Buscar producto..." autocomplete="off">
+<div id="lista"></div>
+<button class="principal" id="bGuardar">Guardar conteo</button>
+
+<script>
+var $ = function (id) { return document.getElementById(id); };
+var productos = [], captura = {}, motivos = [], umbral = 2;
+function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function aviso(t, tipo) { var a = $('aviso'); if (!t) { a.style.display = 'none'; return; } a.className = 'aviso ' + tipo; a.innerHTML = t; a.style.display = 'block'; try { window.scrollTo(0, 0); } catch (e) {} }
+
+function cargar() {
+  google.script.run.withSuccessHandler(function (d) {
+    productos = d.productos || []; motivos = d.motivos || []; umbral = d.umbral; $('umbral').textContent = umbral;
+    pintar(); pintarPend(d.pendientes || [], d.puedeAprobar);
+  }).withFailureHandler(function (e) { aviso('❌ ' + esc(e.message), 'error'); }).listarConteoApp();
+}
+
+function difDe(p) { var c = captura[p.nombre]; if (!c || c.fisico === '' || isNaN(Number(c.fisico))) return null; return Number(c.fisico) - p.sistema; }
+function actualizarDif(p, tarjeta) {
+  var d = difDe(p), el = tarjeta.querySelector('.dif'), ex = tarjeta.querySelector('.extra');
+  if (d === null) { el.textContent = ''; ex.style.display = 'none'; return; }
+  el.className = 'dif ' + (d > 0 ? 'pos' : d < 0 ? 'neg' : 'cero');
+  el.textContent = d === 0 ? '✓ Coincide' : (d > 0 ? 'Sobran ' + d : 'Faltan ' + (-d)) + (Math.abs(d) <= umbral ? ' · se aplica solo' : ' · pasa a aprobación');
+  ex.style.display = d === 0 ? 'none' : 'block';
+}
+function pintar() {
+  var q = $('filtro').value.trim().toLowerCase(), l = $('lista'); l.innerHTML = '';
+  productos.filter(function (p) { return !q || p.nombre.toLowerCase().indexOf(q) !== -1; }).forEach(function (p) {
+    var c = captura[p.nombre] = captura[p.nombre] || { fisico: '', motivo: '', nota: '' };
+    var t = document.createElement('div'); t.className = 'card';
+    var descuadre = p.sistema !== p.lotes;
+    t.innerHTML = '<div class="top"><span class="nom">' + esc(p.nombre) + '</span><span>Sistema: <b>' + p.sistema + '</b></span></div>' +
+      '<div class="sub">En lotes: ' + p.lotes + (descuadre ? ' <span class="warn">· ⚠ no cuadra con el sistema</span>' : '') + '</div>' +
+      '<input type="number" inputmode="numeric" min="0" step="1" placeholder="Lo que contaste" class="fis">' +
+      '<div class="dif"></div>' +
+      '<div class="extra"><select class="mot"><option value="">Motivo de la diferencia...</option>' +
+      motivos.map(function (m) { return '<option>' + esc(m) + '</option>'; }).join('') + '</select>' +
+      '<input type="text" placeholder="Nota (opcional)" class="nt" style="margin-top:6px"></div>';
+    var fis = t.querySelector('.fis'), mot = t.querySelector('.mot'), nt = t.querySelector('.nt');
+    fis.value = c.fisico; mot.value = c.motivo; nt.value = c.nota;
+    fis.addEventListener('input', function () { c.fisico = fis.value; actualizarDif(p, t); });
+    mot.addEventListener('change', function () { c.motivo = mot.value; });
+    nt.addEventListener('input', function () { c.nota = nt.value; });
+    actualizarDif(p, t); l.appendChild(t);
+  });
+  if (!l.children.length) l.innerHTML = '<div class="card">No hay productos que coincidan.</div>';
+}
+$('filtro').addEventListener('input', pintar);
+
+$('bGuardar').addEventListener('click', function () {
+  var lineas = [], sinMotivo = [], resumen = { auto: 0, pend: 0, igual: 0 };
+  productos.forEach(function (p) {
+    var c = captura[p.nombre], d = difDe(p);
+    if (d === null) return;
+    if (!/^\d+$/.test(String(c.fisico).trim())) { sinMotivo.push(p.nombre + ' (usa un número entero)'); return; }
+    if (d === 0) resumen.igual++; else { if (!c.motivo) sinMotivo.push(p.nombre); if (Math.abs(d) <= umbral) resumen.auto++; else resumen.pend++; }
+    lineas.push({ producto: p.nombre, fisico: Number(c.fisico), motivo: c.motivo, nota: c.nota });
+  });
+  if (!lineas.length) { aviso('Captura al menos un conteo.', 'error'); return; }
+  if (sinMotivo.length) { aviso('Revisa: ' + sinMotivo.map(esc).join(', ') + '. Falta el motivo o el número no es válido.', 'error'); return; }
+  if (!confirm('¿Guardar el conteo?\n' + resumen.igual + ' coinciden · ' + resumen.auto + ' ajuste(s) se aplican solos · ' + resumen.pend + ' pasan a aprobación.')) return;
+  $('bGuardar').disabled = true; aviso('⏳ Guardando...', 'info');
+  google.script.run.withSuccessHandler(function (r) {
+    $('bGuardar').disabled = false; captura = {};
+    aviso('✓ ' + esc(r.mensaje), 'ok'); cargar();
+  }).withFailureHandler(function (e) { $('bGuardar').disabled = false; aviso('❌ ' + esc(e.message), 'error'); }).guardarConteoApp({ lineas: lineas });
+});
+
+function pintarPend(ps, puede) {
+  $('bloquePend').style.display = puede && ps.length ? 'block' : 'none';
+  var l = $('pend'); l.innerHTML = '';
+  ps.forEach(function (a) {
+    var t = document.createElement('div'); t.className = 'card';
+    t.innerHTML = '<div class="top"><span class="nom">' + esc(a.producto) + '</span><span class="' + (a.dif > 0 ? 'pos' : 'neg') + '"><b>' + (a.dif > 0 ? '+' : '') + a.dif + '</b></span></div>' +
+      '<div class="sub">' + esc(a.id) + ' · ' + esc(a.fecha) + ' · ' + esc(a.por) + '<br>Sistema: ' + a.sistema + ' → contó ' + a.fisico + '<br>Motivo: ' + esc(a.motivo) + (a.nota ? ' · ' + esc(a.nota) : '') + '</div>' +
+      '<div class="acc"><button class="verde">✅ Aprobar</button><button class="rojo">✖ Rechazar</button></div>';
+    var bs = t.querySelectorAll('button');
+    [['Aprobar', bs[0]], ['Rechazar', bs[1]]].forEach(function (x) {
+      x[1].addEventListener('click', function () {
+        if (!confirm('¿' + x[0] + ' el ajuste ' + a.id + ' de ' + a.producto + '?')) return;
+        google.script.run.withSuccessHandler(function (r) { aviso('✓ ' + esc(r.mensaje), 'ok'); cargar(); })
+          .withFailureHandler(function (e) { aviso('❌ ' + esc(e.message), 'error'); }).aprobarAjusteApp(a.id, x[0]);
+      });
+    });
+    l.appendChild(t);
+  });
+}
+cargar();
+</script>
+</body>
+</html>
