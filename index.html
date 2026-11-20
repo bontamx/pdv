@@ -1,4 +1,16 @@
 <!DOCTYPE html>
+<!--
+*********************************************************************************
+ PARA:    GitHub Pages (el repositorio de la app). NO es de Google Sheets ni de Apps Script.
+ ACCIÓN:  ACTUALIZAR: en GitHub abre index.html > lápiz > borra todo > pega esto > Commit changes.
+ PASOS:   1) IMPORTANTE: después de pegar, vuelve a poner tu dirección de la API en la línea
+             var API_URL = '...';   (la que termina en /exec). Si no, la app dirá «Falta configurar».
+          2) Espera 1 o 2 minutos a que GitHub Pages publique.
+ QUÉ CAMBIA: Agrega al menú «📦 Conteo físico» (Inventario nivel 2 o más) y «🛠️ Ajuste de inventario»
+             (solo Inventario nivel 4: administración).
+ REQUIERE: conteo.html y bonta.js en el mismo repositorio.
+*********************************************************************************
+-->
 <html lang="es">
 <head>
 <meta charset="utf-8">
@@ -98,7 +110,7 @@
 
 <script>
 /* ============ CONFIGURACIÓN: pega aquí la dirección de tu implementación web (termina en /exec) ============ */
-var API_URL = 'https://script.google.com/macros/s/AKfycbyp8QNmnaXMUD1zASyFPt7k9zZado8Ffeec1C4jDcyw-zLNMK5Sh9LomATrX1-Q0vxe7w/exec';
+var API_URL = 'PEGA_AQUI_LA_DIRECCION_DE_LA_API';
 /* ========================================================================================================== */
 
 try { if (API_URL && API_URL.indexOf('PEGA_AQUI') !== 0) localStorage.setItem('bonta_api', API_URL); } catch (e) {}
@@ -155,7 +167,7 @@ function irAInicio() {
     a.textContent = m; b.textContent = estado.permisos[m]; tr.appendChild(a); tr.appendChild(b); t.appendChild(tr);
   });
   var m = $('iMenu'); m.innerHTML = '';
-  [['venta.html', '🧾 Nueva venta', 'Ventas', 2, '#1976d2'], ['pedidos.html', '📋 Pedidos por entregar', 'Pedidos', 1, '#2e7d32'], ['cancelar.html', '❌ Cancelar pedido o producto', 'Cancelaciones', 3, '#b00020'], ['usuarios.html', '👥 Usuarios y permisos', 'Usuarios y permisos', 4, '#555555']].forEach(function (x) {
+  [['venta.html', '🧾 Nueva venta', 'Ventas', 2, '#1976d2'], ['pedidos.html', '📋 Pedidos por entregar', 'Pedidos', 1, '#2e7d32'], ['cancelar.html', '❌ Cancelar pedido o producto', 'Cancelaciones', 3, '#b00020'], ['conteo.html', '📦 Conteo físico', 'Inventario', 2, '#6a1b9a'], ['conteo.html?modo=ajuste', '🛠️ Ajuste de inventario', 'Inventario', 4, '#b26a00'], ['usuarios.html', '👥 Usuarios y permisos', 'Usuarios y permisos', 4, '#555555']].forEach(function (x) {
     if ((estado.permisos[x[2]] || 0) < x[3]) return;
     var a = document.createElement('a'); a.href = x[0]; a.textContent = x[1];
     a.style.cssText = 'display:block;background:' + x[4] + ';color:#fff;text-decoration:none;border-radius:12px;padding:18px 14px;margin-top:12px;font-size:18px;font-weight:bold;text-align:center';
