@@ -1,4 +1,14 @@
 <!DOCTYPE html>
+<!--
+*********************************************************************************
+ PARA:    GitHub Pages (el repositorio de la app). NO es de Google Sheets ni de Apps Script.
+ ACCIÓN:  ACTUALIZAR  venta.html : en GitHub ábrelo > lápiz > borra todo > pega esto > Commit changes.
+ REQUIERE: En el Apps Script del PDV: Envios.gs instalado (y corrida prepararZonasEnvio), Api26 actualizado con
+          el Api.gs de hoy, y «Nueva versión» de la implementación de la API. bonta.js ya debe estar en GitHub.
+ QUÉ CAMBIA: Igual que Formulario.html: el envío se calcula solo por C.P. con la promoción (2 pastas o más:
+          gratis para el cliente; 1 pasta: Bonta subsidia $30; C.P. fuera de la lista: se captura a mano).
+*********************************************************************************
+-->
 <html>
 <head>
 <title>Nueva venta · Bonta</title>
@@ -140,11 +150,13 @@
 
   <h3>🚚 Entrega</h3>
   <label for="envioCliente">Envío a domicilio que PAGA EL CLIENTE ($) — pon 0 si no se cobra</label>
-  <input id="envioCliente" type="number" min="0" step="1" placeholder="Ej. 60" oninput="render()">
-  <div class="estado info" style="display:block">Este monto se suma al total del pedido y sale en el ticket. Lo pone quien vende, según la zona.</div>
+  <input id="envioCliente" type="number" min="0" step="1" placeholder="Ej. 60" oninput="envioManual = true; render()">
+  <div id="infoEnvio" class="estado ok"></div>
+  <div class="estado info" style="display:block">Con un C.P. de la lista, el monto se calcula solo según la promoción. Si el C.P. es otro, captúralo tú. Se suma al total y sale en el ticket.</div>
+  <button class="sec" type="button" onclick="recalcularEnvio()">↻ Calcular envío con la promoción</button>
 
   <div class="fila">
-    <div><label for="costoEntrega">Costo de entrega para Bonta ($, interno)</label><input id="costoEntrega" type="number" min="0" step="1"></div>
+    <div><label for="costoEntrega">Costo de entrega para Bonta ($, interno)</label><input id="costoEntrega" type="number" min="0" step="1" oninput="costoManual = true"></div>
     <div><label for="comision">Comisión de cobro ($)</label><input id="comision" type="number" min="0" step="0.01"></div>
   </div>
   <div class="estado warn" style="display:block">«Costo de entrega» es lo que le cuesta a Bonta mandar el pedido. NO se cobra al cliente: para eso es el campo de arriba.</div>
@@ -178,6 +190,7 @@
 <script src="bonta.js"></script>
 <script>
 var catalogo = [], combos = [], carrito = [], clienteSel = null, forzarNuevo = false, timer = null, cps = {};
+var zonas = {}, reglasEnvio = { subsidio: 30, pastasGratis: 2 }, envioManual = false, costoManual = false;
 var $ = function (id) { return document.getElementById(id); };
 
 /* ---------- precio (misma regla que la hoja Movimientos) ---------- */
@@ -215,8 +228,10 @@ function infoCP() {
   var v = $('cp').value.trim(), e = $('infoCP');
   if (!v) { e.style.display = 'none'; return; }
   e.style.display = 'block';
-  if (cps[v] !== undefined) { e.className = 'estado ok'; e.innerHTML = '✓ ' + esc(cps[v]); }
-  else { e.className = 'estado error'; e.innerHTML = '⚠️ Ese C.P. no está en la lista (hoja Listas). Puedes guardar, pero quedará «Fuera de lista».'; }
+  var z = zonas[v];
+  if (z) { e.className = 'estado ok'; e.innerHTML = '✓ Zona con envío: costo base ' + dinero(z.costo) + (z.minutos ? ' · aprox. ' + z.minutos + ' min' : '') + (cps[v] !== undefined ? ' · ' + esc(cps[v]) : ''); }
+  else if (cps[v] !== undefined) { e.className = 'estado info'; e.innerHTML = '✓ ' + esc(cps[v]) + ' · sin costo fijo: captura el costo del envío a mano.'; }
+  else { e.className = 'estado error'; e.innerHTML = '⚠️ Ese C.P. no está en la lista de envíos. <b>Captura el costo del envío a mano</b> (no aplica la promoción). Quedará «Fuera de lista».'; }
 }
 function dinero(n) { return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(n) || 0); }
 function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -225,11 +240,16 @@ function esIngreso() { return $('concepto').value === 'Ingreso al punto de venta
 
 /* ---------- carga ---------- */
 document.addEventListener('DOMContentLoaded', function () {
-  $('cp').addEventListener('input', infoCP);
+  $('cp').addEventListener('input', function () { envioManual = false; costoManual = false; infoCP(); render(); });
   $('estadoPedido').addEventListener('change', actualizarMotivo);
   $('producto').addEventListener('change', revisarServicio);
   $('formaPago').addEventListener('change', function () { $('estadoPago').value = $('formaPago').value === 'Pendiente' ? 'Pendiente' : 'Pagado'; });
   msg('estado', '⏳ Cargando listas...', 'info');
+  google.script.run.withSuccessHandler(function (z) {
+    zonas = {}; (z.zonas || []).forEach(function (x) { zonas[x.cp] = x; });
+    reglasEnvio = { subsidio: Number(z.subsidio) || 0, pastasGratis: Number(z.pastasGratis) || 2 };
+    infoCP(); render();
+  }).withFailureHandler(function () { /* sin zonas instaladas: el envío se captura a mano, como antes */ }).obtenerZonasEnvio();
   google.script.run.withSuccessHandler(function (d) {
     catalogo = d.catalogo || []; combos = d.combos || [];
     var s = $('producto'); s.innerHTML = '<option value="">Seleccionar producto...</option>';
@@ -295,7 +315,7 @@ function elegir(c) {
   clienteSel = c; forzarNuevo = false;
   $('telefono').value = c.telefono || ''; $('nombre').value = c.nombre; $('idCliente').value = c.id;
   $('direccion').value = c.direccion || ''; $('correo').value = c.correo || ''; $('canal').value = c.canal || '';
-  $('cp').value = c.cp || ''; infoCP(); actualizarLead(); actualizarEntrega();
+  $('cp').value = c.cp || ''; envioManual = false; costoManual = false; infoCP(); actualizarLead(); actualizarEntrega();
   $('sinTel').checked = !c.telefono;
   $('sugTel').style.display = 'none'; $('sugNom').style.display = 'none';
   msg('estadoCliente', '✓ Cliente existente: ' + esc(c.nombre) + ' · ' + esc(c.id), 'ok');
@@ -384,10 +404,30 @@ function agregar() {
 }
 function quitar(i) { carrito.splice(i, 1); render(); }
 
+/* ---------- promoción de envío por C.P. ---------- */
+function esPasta(nombre) { var p = catalogo.filter(function (x) { return x.nombre === nombre; })[0]; return !!p && (p.categoria === 'Pasta rellena' || p.categoria === 'Pasta'); }
+function contarPastas() { var n = 0; carrito.forEach(function (i) { if (i.tipo !== 'Cortesía' && esPasta(i.producto)) n += Number(i.cantidad) || 0; }); return n; }
+function aplicarEnvioAuto() {
+  var info = $('infoEnvio');
+  if (!info) return;
+  var z = esIngreso() ? null : zonas[$('cp').value.trim()];
+  if (!z) { info.style.display = 'none'; return; }
+  var base = z.costo, n = contarPastas(), cliente, txt;
+  if (n >= reglasEnvio.pastasGratis) { cliente = 0; txt = '🎉 Promo: ' + n + ' pastas → el envío corre por cuenta de Bonta (' + dinero(base) + ').'; }
+  else if (n === 1) { cliente = Math.max(0, base - reglasEnvio.subsidio); txt = 'Promo: 1 pasta → Bonta subsidia ' + dinero(reglasEnvio.subsidio) + '. El cliente paga ' + dinero(cliente) + ' de ' + dinero(base) + '.'; }
+  else { cliente = base; txt = 'Sin promo (no hay pastas en el pedido): el cliente paga el envío completo (' + dinero(base) + ').'; }
+  if (!envioManual) $('envioCliente').value = cliente;
+  if (!costoManual) $('costoEntrega').value = base;
+  info.className = 'estado ok'; info.style.display = 'block';
+  info.textContent = txt + (envioManual ? ' (el monto del envío fue editado a mano)' : '');
+}
+function recalcularEnvio() { envioManual = false; costoManual = false; render(); }
+
 /* envío que paga el cliente (campo propio): se vuelve la línea «Envío a domicilio» al guardar */
 function envioCampo() { var v = $('envioCliente').value; return v === '' ? '' : Number(v); }
 
 function render() {
+  aplicarEnvioAuto();
   var c = $('carrito'); c.innerHTML = '';
   var r = calcularCarrito(carrito, catalogo, combos), ing = esIngreso();
   carrito.forEach(function (it, i) {
@@ -553,7 +593,7 @@ function limpiarTodo() {
   $('producto').value = ''; $('cantidad').value = '1'; $('tipo').value = ''; $('manual').value = ''; $('bloqueManual').className = 'oculto';
   $('formaPago').value = ''; carrito = []; $('estado').style.display = 'none';
   $('bloquePedido').className = ''; $('fuente').value = ''; $('plataforma').value = ''; $('campana').value = ''; $('cp').value = ''; $('infoCP').style.display = 'none';
-  $('envioCliente').value = '';
+  $('envioCliente').value = ''; envioManual = false; costoManual = false; if ($('infoEnvio')) $('infoEnvio').style.display = 'none';
   $('costoEntrega').value = ''; $('comision').value = ''; $('horaPrometida').value = ''; $('horaSalida').value = ''; $('estadoPedido').value = 'Confirmado'; $('estadoPago').value = 'Pagado';
   $('direccionEntrega').value = ''; $('incidencia').value = 'Ninguna'; $('motivoCancelacion').value = ''; $('bloqueMotivo').className = 'oculto';
   $('tipo').disabled = false; $('lblManual').textContent = 'Precio manual por pieza ($)'; tk = null; actualizarLead();
