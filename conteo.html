@@ -8,10 +8,14 @@
           1) En el Apps Script del PDV: Conteo27.gs INSTALADO y Api26.gs ACTUALIZADO (versión del conteo),
              y luego Implementar > Administrar implementaciones > lápiz de la API > Nueva versión.
           2) En GitHub: bonta.js ya existe y el index.html nuevo (trae el botón «Conteo físico»).
- QUÉ HACE: Conteo físico del producto terminado. Escribes lo que contaste; el sistema calcula la
-          diferencia contra el Inventario PDV. Diferencias chicas se aplican solas; las grandes
-          esperan aprobación de quien tenga nivel 4 en Inventario.
- PERMISOS: Inventario nivel 2 para contar; nivel 4 para aprobar o rechazar (lo revisa el servidor).
+ QUÉ HACE: Esta misma pantalla sirve para DOS cosas:
+          • conteo.html            → Conteo físico: escribes lo que contaste; las diferencias chicas se aplican
+                                     solas y las grandes esperan aprobación.
+          • conteo.html?modo=ajuste → AJUSTE DE INVENTARIO (administración): el cambio se aplica de inmediato,
+                                     sin aprobación. El botón del menú del inicio ya apunta a esta dirección.
+ PERMISOS: Inventario nivel 2 para contar; nivel 4 para ajustar, aprobar o rechazar (lo revisa el servidor).
+          Para que la administradora pueda: en la hoja «Roles y permisos», pon 4 en la celda de
+          Inventario × Administración.
 *********************************************************************************
 -->
 <html lang="es">
@@ -41,8 +45,8 @@
 </style>
 </head>
 <body>
-<h2>📦 Conteo físico (producto terminado)</h2>
-<div class="nota">Cuenta lo que hay en el congelador y escríbelo. <b>Captura solo los productos que contaste.</b>
+<h2 id="titulo">📦 Conteo físico (producto terminado)</h2>
+<div class="nota" id="nota">Cuenta lo que hay en el congelador y escríbelo. <b>Captura solo los productos que contaste.</b>
   Diferencias de hasta <span id="umbral">2</span> piezas se aplican solas; las mayores esperan aprobación.</div>
 <div id="aviso" class="aviso"></div>
 
@@ -56,12 +60,19 @@
 <script>
 var $ = function (id) { return document.getElementById(id); };
 var productos = [], captura = {}, motivos = [], umbral = 2;
+var MODO_AJUSTE = /[?&]modo=ajuste/.test(location.search);
+if (MODO_AJUSTE) {
+  document.title = 'Ajuste de inventario · Bonta'; $('titulo').textContent = '🛠️ Ajuste de inventario (administración)';
+  $('nota').innerHTML = 'Escribe la cantidad <b>real</b> de cada producto que quieras ajustar. <b>El cambio se aplica de inmediato</b>, sin aprobación, y queda registrado con tu nombre.';
+  $('bGuardar').textContent = 'Aplicar ajuste'; $('bGuardar').style.background = '#b26a00';
+}
 function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 function aviso(t, tipo) { var a = $('aviso'); if (!t) { a.style.display = 'none'; return; } a.className = 'aviso ' + tipo; a.innerHTML = t; a.style.display = 'block'; try { window.scrollTo(0, 0); } catch (e) {} }
 
 function cargar() {
   google.script.run.withSuccessHandler(function (d) {
-    productos = d.productos || []; motivos = d.motivos || []; umbral = d.umbral; $('umbral').textContent = umbral;
+    productos = d.productos || []; motivos = d.motivos || []; umbral = d.umbral; if ($('umbral')) $('umbral').textContent = umbral;
+    if (MODO_AJUSTE && !d.puedeAprobar) { aviso('Tu rol no puede hacer ajustes de inventario. Pide acceso a la administración.', 'error'); $('lista').innerHTML = ''; $('filtro').style.display = 'none'; $('bGuardar').style.display = 'none'; return; }
     pintar(); pintarPend(d.pendientes || [], d.puedeAprobar);
   }).withFailureHandler(function (e) { aviso('❌ ' + esc(e.message), 'error'); }).listarConteoApp();
 }
@@ -71,7 +82,7 @@ function actualizarDif(p, tarjeta) {
   var d = difDe(p), el = tarjeta.querySelector('.dif'), ex = tarjeta.querySelector('.extra');
   if (d === null) { el.textContent = ''; ex.style.display = 'none'; return; }
   el.className = 'dif ' + (d > 0 ? 'pos' : d < 0 ? 'neg' : 'cero');
-  el.textContent = d === 0 ? '✓ Coincide' : (d > 0 ? 'Sobran ' + d : 'Faltan ' + (-d)) + (Math.abs(d) <= umbral ? ' · se aplica solo' : ' · pasa a aprobación');
+  el.textContent = d === 0 ? '✓ Coincide' : (d > 0 ? 'Sobran ' + d : 'Faltan ' + (-d)) + (MODO_AJUSTE ? ' · se aplica de inmediato' : (Math.abs(d) <= umbral ? ' · se aplica solo' : ' · pasa a aprobación'));
   ex.style.display = d === 0 ? 'none' : 'block';
 }
 function pintar() {
@@ -104,17 +115,17 @@ $('bGuardar').addEventListener('click', function () {
     var c = captura[p.nombre], d = difDe(p);
     if (d === null) return;
     if (!/^\d+$/.test(String(c.fisico).trim())) { sinMotivo.push(p.nombre + ' (usa un número entero)'); return; }
-    if (d === 0) resumen.igual++; else { if (!c.motivo) sinMotivo.push(p.nombre); if (Math.abs(d) <= umbral) resumen.auto++; else resumen.pend++; }
+    if (d === 0) resumen.igual++; else { if (!c.motivo) sinMotivo.push(p.nombre); if (MODO_AJUSTE || Math.abs(d) <= umbral) resumen.auto++; else resumen.pend++; }
     lineas.push({ producto: p.nombre, fisico: Number(c.fisico), motivo: c.motivo, nota: c.nota });
   });
   if (!lineas.length) { aviso('Captura al menos un conteo.', 'error'); return; }
   if (sinMotivo.length) { aviso('Revisa: ' + sinMotivo.map(esc).join(', ') + '. Falta el motivo o el número no es válido.', 'error'); return; }
-  if (!confirm('¿Guardar el conteo?\n' + resumen.igual + ' coinciden · ' + resumen.auto + ' ajuste(s) se aplican solos · ' + resumen.pend + ' pasan a aprobación.')) return;
+  if (!confirm(MODO_AJUSTE ? '¿Aplicar el ajuste de inventario?\n' + resumen.auto + ' producto(s) cambian de inmediato. Esto no se puede deshacer desde aquí.' : '¿Guardar el conteo?\n' + resumen.igual + ' coinciden · ' + resumen.auto + ' ajuste(s) se aplican solos · ' + resumen.pend + ' pasan a aprobación.')) return;
   $('bGuardar').disabled = true; aviso('⏳ Guardando...', 'info');
   google.script.run.withSuccessHandler(function (r) {
     $('bGuardar').disabled = false; captura = {};
     aviso('✓ ' + esc(r.mensaje), 'ok'); cargar();
-  }).withFailureHandler(function (e) { $('bGuardar').disabled = false; aviso('❌ ' + esc(e.message), 'error'); }).guardarConteoApp({ lineas: lineas });
+  }).withFailureHandler(function (e) { $('bGuardar').disabled = false; aviso('❌ ' + esc(e.message), 'error'); }).guardarConteoApp({ lineas: lineas, administrativo: MODO_AJUSTE });
 });
 
 function pintarPend(ps, puede) {
