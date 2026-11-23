@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<!--
+*********************************************************************************
+ PARA:    GitHub Pages (el repositorio de la app). NO es de Google Sheets ni de Apps Script.
+ ACCIÓN:  INSTALAR NUEVO: en GitHub, Add file > Create new file, nombre exacto  clientes.html
+          (en minúsculas, en la raíz junto a index.html). Pega todo esto y Commit changes.
+ REQUIERE (antes de subir esta pantalla):
+          1) En el Apps Script del PDV: el script  Clientes  instalado y el archivo de la API (Api26)
+             actualizado con Api.gs de hoy, y luego Implementar > Administrar implementaciones > lápiz >
+             Nueva versión.
+          2) En GitHub: bonta.js ya existe, y el index.html nuevo (trae el botón «📇 Clientes»).
+ QUÉ HACE: Busca clientes por teléfono, nombre (en cualquier orden) o ID, y permite EDITAR nombre, teléfono,
+          dirección, C.P., canal, correo y notas. El ID y la fuente de adquisición no se editan. Las ventas
+          pasadas no cambian. Cada cambio queda registrado (quién, cuándo, antes y después).
+ PERMISOS: Clientes nivel 1 para buscar y ver; nivel 3 para editar (lo revisa el servidor).
+*********************************************************************************
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clientes · Bonta</title>
+<script src="bonta.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; padding: 12px; margin: 0; color: #222; font-size: 15px; background: #fafafa; }
+  h2 { font-size: 19px; margin: 6px 0 10px; }
+  label { display: block; font-size: 12px; font-weight: bold; margin: 12px 0 4px; }
+  input, select, textarea { width: 100%; padding: 11px; border: 1px solid #bbb; border-radius: 8px; font-size: 16px; background: #fff; font-family: inherit; }
+  textarea { min-height: 64px; resize: vertical; }
+  input[readonly], input:disabled, select:disabled, textarea:disabled { background: #f0f0f0; color: #555; }
+  button { border: 0; border-radius: 9px; cursor: pointer; font-size: 15px; font-weight: bold; padding: 13px; }
+  .principal { background: #00695c; color: #fff; width: 100%; margin-top: 16px; } .gris { background: #eee; color: #222; width: 100%; margin-top: 10px; }
+  .card { background: #fff; border: 1px solid #ddd; border-radius: 12px; padding: 12px; margin-top: 10px; cursor: pointer; }
+  .nom { font-weight: bold; } .sub { color: #666; font-size: 12px; margin-top: 3px; line-height: 1.4; }
+  .aviso { display: none; margin-top: 12px; padding: 10px; border-radius: 8px; font-size: 13px; line-height: 1.45; }
+  .error { background: #ffebee; color: #7f0020; } .ok { background: #e8f5e9; color: #1b5e20; } .info { background: #e3f2fd; color: #0d3c7a; } .warn { background: #fff8e1; color: #6d5400; }
+  .chk { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 13px; } .chk input { width: auto; }
+  .oculto { display: none; }
+  .hist { font-size: 12px; color: #444; border-left: 3px solid #ccc; padding-left: 8px; margin-top: 6px; line-height: 1.45; }
+  summary { cursor: pointer; font-weight: bold; font-size: 13px; margin-top: 16px; }
+</style>
+</head>
+<body>
+<h2>📇 Clientes</h2>
+<div id="aviso" class="aviso"></div>
+
+<section id="vBuscar">
+  <input id="q" type="search" placeholder="Teléfono, nombre o ID (CL-0008)..." autocomplete="off">
+  <div id="info" class="sub" style="margin-top:8px"></div>
+  <div id="lista"></div>
+</section>
+
+<section id="vEditar" class="oculto">
+  <div id="notaSoloVer" class="aviso info">Solo puedes consultar a este cliente. Para editar necesitas permiso de administración.</div>
+  <label for="eId">ID</label><input id="eId" readonly>
+  <label for="eNombre">Nombre</label><input id="eNombre" type="text" autocomplete="off">
+  <label for="eTel">Teléfono (10 dígitos)</label><input id="eTel" type="text" inputmode="numeric" autocomplete="off">
+  <div class="chk"><input id="eSinTel" type="checkbox"><label for="eSinTel" style="margin:0;font-weight:normal">Sin teléfono</label></div>
+  <label for="eDir">Dirección</label><textarea id="eDir"></textarea>
+  <label for="eCp">C.P.</label><input id="eCp" type="text" inputmode="numeric" maxlength="5" autocomplete="off">
+  <label for="eCanal">Canal</label><select id="eCanal"></select>
+  <label for="eCorreo">Correo (para el ticket)</label><input id="eCorreo" type="email" autocapitalize="none" autocorrect="off" spellcheck="false">
+  <label for="eNotas">Notas e incidencias</label><textarea id="eNotas"></textarea>
+  <label for="eFuente">Fuente de adquisición (no se edita)</label><input id="eFuente" readonly>
+  <button class="principal" id="bGuardar">Guardar cambios</button>
+  <button class="gris" id="bVolver">← Volver a la búsqueda</button>
+  <details id="dHist"><summary>Historial de cambios</summary><div id="hist"></div></details>
+</section>
+
+<script>
+var $ = function (id) { return document.getElementById(id); };
+var clientes = [], canales = [], puedeEditar = false, actual = null, timer = null;
+function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function aviso(t, tipo) { var a = $('aviso'); if (!t) { a.style.display = 'none'; return; } a.className = 'aviso ' + tipo; a.innerHTML = t; a.style.display = 'block'; try { window.scrollTo(0, 0); } catch (e) {} }
+
+function buscar() {
+  google.script.run.withSuccessHandler(function (d) {
+    clientes = d.clientes || []; canales = d.canales || []; puedeEditar = !!d.puedeEditar;
+    $('info').textContent = $('q').value.trim() ? clientes.length + ' resultado(s) de ' + d.total + ' clientes' : 'Mostrando los ' + clientes.length + ' más recientes de ' + d.total + ' clientes';
+    pintarLista();
+  }).withFailureHandler(function (e) { aviso('❌ ' + esc(e.message), 'error'); }).clientesBuscarApp($('q').value);
+}
+function pintarLista() {
+  var l = $('lista'); l.innerHTML = '';
+  if (!clientes.length) { l.innerHTML = '<div class="card" style="cursor:default">No encontré clientes con esa búsqueda.</div>'; return; }
+  clientes.forEach(function (c) {
+    var d = document.createElement('div'); d.className = 'card';
+    d.innerHTML = '<div class="nom">' + esc(c.nombre) + '</div><div class="sub">' + esc(c.id) + ' · ' + esc(c.telefono || 'sin teléfono') + (c.cp ? ' · C.P. ' + esc(c.cp) : '') + '<br>' + esc(c.direccion || 'sin dirección') + '</div>';
+    d.addEventListener('click', function () { abrir(c); });
+    l.appendChild(d);
+  });
+}
+$('q').addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(buscar, 350); });
+
+function abrir(c) {
+  actual = c; aviso('');
+  $('eId').value = c.id; $('eNombre').value = c.nombre; $('eTel').value = c.telefono; $('eSinTel').checked = !c.telefono; $('eDir').value = c.direccion; $('eCp').value = c.cp;
+  var s = $('eCanal'); s.innerHTML = '<option value=""></option>';
+  var lista = canales.slice(); if (c.canal && lista.indexOf(c.canal) === -1) lista.push(c.canal);
+  lista.forEach(function (x) { var o = document.createElement('option'); o.value = x; o.textContent = x; s.appendChild(o); });
+  s.value = c.canal; $('eCorreo').value = c.correo; $('eNotas').value = c.notas; $('eFuente').value = c.fuente;
+  ['eNombre', 'eTel', 'eSinTel', 'eDir', 'eCp', 'eCanal', 'eCorreo', 'eNotas'].forEach(function (i) { $(i).disabled = !puedeEditar; });
+  $('bGuardar').style.display = puedeEditar ? 'block' : 'none'; $('notaSoloVer').style.display = puedeEditar ? 'none' : 'block';
+  $('hist').innerHTML = 'Cargando...';
+  $('vBuscar').className = 'oculto'; $('vEditar').className = '';
+  google.script.run.withSuccessHandler(function (h) {
+    $('hist').innerHTML = (h && h.length) ? h.map(function (x) { return '<div class="hist"><b>' + esc(x.campo) + '</b>: «' + esc(x.antes) + '» → «' + esc(x.despues) + '»<br>' + esc(x.fecha) + ' · ' + esc(x.por) + '</div>'; }).join('') : '<div class="hist">Sin cambios registrados.</div>';
+  }).withFailureHandler(function () { $('hist').textContent = ''; }).clientesCambiosApp(c.id);
+}
+$('eSinTel').addEventListener('change', function () { if (this.checked) $('eTel').value = ''; });
+$('bVolver').addEventListener('click', function () { $('vEditar').className = 'oculto'; $('vBuscar').className = ''; aviso(''); buscar(); });
+
+$('bGuardar').addEventListener('click', function () {
+  var sinTel = $('eSinTel').checked;
+  var datos = { id: actual.id, nombre: $('eNombre').value, telefono: $('eTel').value, sinTelefono: sinTel, direccion: $('eDir').value, cp: $('eCp').value, canal: $('eCanal').value, correo: $('eCorreo').value, notas: $('eNotas').value };
+  if (!datos.nombre.trim()) { aviso('Escribe el nombre del cliente.', 'error'); return; }
+  if (!sinTel && !/^\d{10}$/.test(datos.telefono.replace(/\D/g, '').replace(/^521?(?=\d{10}$)/, ''))) { aviso('El teléfono debe tener 10 dígitos (o marca «Sin teléfono»).', 'error'); return; }
+  $('bGuardar').disabled = true; aviso('⏳ Guardando...', 'info');
+  google.script.run.withSuccessHandler(function (r) {
+    $('bGuardar').disabled = false;
+    if (r.sinCambios) { aviso('No hay cambios que guardar.', 'info'); return; }
+    actual = r.cliente;
+    var t = '✓ ' + esc(r.mensaje) + '<br>' + r.cambios.map(function (c) { return '• ' + esc(c.campo) + ': «' + esc(c.antes) + '» → «' + esc(c.despues) + '»'; }).join('<br>');
+    aviso(t + (r.aviso ? '<br>⚠️ ' + esc(r.aviso) : ''), r.aviso ? 'warn' : 'ok');
+    $('eTel').value = actual.telefono; $('eNombre').value = actual.nombre;
+    google.script.run.withSuccessHandler(function (h) { abrirHistorial(h); }).clientesCambiosApp(actual.id);
+  }).withFailureHandler(function (e) { $('bGuardar').disabled = false; aviso('❌ ' + esc(e.message), 'error'); }).clientesGuardarApp(datos);
+});
+function abrirHistorial(h) {
+  $('hist').innerHTML = (h && h.length) ? h.map(function (x) { return '<div class="hist"><b>' + esc(x.campo) + '</b>: «' + esc(x.antes) + '» → «' + esc(x.despues) + '»<br>' + esc(x.fecha) + ' · ' + esc(x.por) + '</div>'; }).join('') : '<div class="hist">Sin cambios registrados.</div>';
+}
+buscar();
+</script>
+</body>
+</html>
