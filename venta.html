@@ -601,5 +601,98 @@ function limpiarTodo() {
   $('bloqueIngreso').className = 'oculto'; esNuevo = false; $('bloqueNuevo').className = 'oculto'; $('producto').disabled = false; loteManual = false; render();
 }
 </script>
+ <!--
+*********************************************************************************
+ PARA:    DOS archivos con el MISMO cambio:
+          (a) Formulario.html en el Apps Script de «App PDV»  y
+          (b) venta.html en GitHub (el repo de https://bontamx.github.io/pdv/).
+ ACCIÓN:  ACTUALIZAR (no se reemplaza nada): pega TODO este bloque (el <script> completo) justo ANTES de la
+          etiqueta  </body>  del archivo, debajo del último  </script>.  Guarda.
+ REQUIERE: Hermanos.gs instalado y las 3 ediciones hechas en Code.gs (están en el encabezado de Hermanos.gs),
+          con «Nueva versión» de las implementaciones. En GitHub, sube venta.html y vuelve a probar.
+ QUÉ HACE: Agrega el botón «🙏 Promo hermanos» debajo del total. Al encenderlo (y si el pedido lleva salsa):
+          • descuenta $30 por cada pasta (también sobre el combo),
+          • pone el envío que paga el cliente en $0 (el costo interno se sigue llenando),
+          • muestra el aviso en verde; si falta la salsa, avisa que todavía no aplica.
+          Se apaga solo al limpiar el formulario o al guardar la venta.
+ CAMBIAR EL DESCUENTO: la cifra está en HERMANOS_DESC (aquí) y en HERMANOS_CFG de Hermanos.gs: deben decir lo mismo.
+*********************************************************************************
+-->
+<script>
+(function () {
+  var HERMANOS_DESC = 30, activa = false;
+
+  function esSalsaH(nombre) { var p = catalogo.filter(function (x) { return x.nombre === nombre; })[0]; return !!p && p.categoria === 'Salsa'; }
+  function haySalsa() { return carrito.some(function (i) { return i.tipo !== 'Cortesía' && esSalsaH(i.producto); }); }
+  window.hermanosActiva = function () { return activa && !esIngreso() && haySalsa(); };
+
+  /* 1) precio: $30 menos por cada pasta (sin cortesías ni precios manuales) */
+  var calcOrig = calcularCarrito;
+  calcularCarrito = function (items, cat, combos) {
+    var r = calcOrig(items, cat, combos);
+    r.hermanosDesc = 0;
+    if (!window.hermanosActiva()) return r;
+    var por = {}; cat.forEach(function (p) { por[p.nombre] = p; });
+    items.forEach(function (it, i) {
+      var p = por[it.producto];
+      if (!p || it.tipo === 'Cortesía' || it.tipo === 'Manual') return;
+      if (p.categoria !== 'Pasta rellena' && p.categoria !== 'Pasta') return;
+      var q = Number(it.cantidad), d = Math.min(HERMANOS_DESC * q, r.lineas[i].total);
+      r.lineas[i].total -= d; r.lineas[i].unit = q ? r.lineas[i].total / q : 0; r.lineas[i].herm = d;
+      r.total -= d; r.hermanosDesc += d;
+    });
+    return r;
+  };
+
+  /* 2) envío: sin cobro al cliente */
+  var envioOrig = aplicarEnvioAuto;
+  aplicarEnvioAuto = function () {
+    envioOrig();
+    if (!window.hermanosActiva()) return;
+    var info = $('infoEnvio'), z = zonas[$('cp').value.trim()];
+    if (!envioManual) $('envioCliente').value = 0;
+    if (z && !costoManual) $('costoEntrega').value = z.costo;
+    info.className = 'estado ok'; info.style.display = 'block';
+    info.textContent = '🙏 Promo hermanos: sin cobro de envío' + (z ? ' (a Bonta le cuesta ' + dinero(z.costo) + ')' : ' (captura el costo interno a mano)') + (envioManual ? ' · monto editado a mano' : '') + '.';
+  };
+
+  /* 3) aviso debajo del total */
+  var renderOrig = render;
+  render = function () {
+    renderOrig();
+    var caja = $('cajaHermanos'); if (caja) caja.style.display = esIngreso() ? 'none' : 'block';
+    var n = $('notaPromo'), partes = [], tipo = 'ok';
+    if (n.style.display === 'block') partes.push(n.textContent);
+    if (activa && !esIngreso()) {
+      if (window.hermanosActiva()) {
+        var d = calcularCarrito(carrito, catalogo, combos).hermanosDesc;
+        partes.push('🙏 Promo hermanos: ' + (d > 0 ? '−' + dinero(d) + ' en pastas y ' : '') + 'envío sin costo.');
+      } else { partes.push('⚠️ Promo hermanos encendida, pero falta agregar una salsa: todavía no aplica.'); tipo = 'warn'; }
+    }
+    n.className = 'estado ' + tipo; n.style.display = partes.length ? 'block' : 'none';
+    n.innerHTML = partes.map(esc).join('<br>');
+  };
+
+  /* 4) al guardar: cada línea lleva la marca para que el servidor lo sepa */
+  var guardarOrig = guardar;
+  guardar = function () { var h = window.hermanosActiva(); carrito.forEach(function (i) { i.hermanos = h; }); guardarOrig(); };
+
+  /* 5) al limpiar: se apaga */
+  var limpiarOrig = limpiarTodo;
+  limpiarTodo = function () { activa = false; pintarBoton(); limpiarOrig(); };
+
+  /* botón */
+  function pintarBoton() {
+    var b = $('btnHermanos'); if (!b) return;
+    b.textContent = activa ? '🙏 Promo hermanos: ACTIVA (toca para apagar)' : '🙏 Promo hermanos: apagada (toca para encender)';
+    b.style.background = activa ? '#2e7d32' : ''; b.style.color = activa ? '#fff' : '';
+  }
+  var caja = document.createElement('div'); caja.id = 'cajaHermanos';
+  caja.innerHTML = '<button type="button" class="sec" id="btnHermanos"></button>';
+  var ref = $('notaPromo'); ref.parentNode.insertBefore(caja, ref);
+  $('btnHermanos').addEventListener('click', function () { activa = !activa; envioManual = false; costoManual = false; pintarBoton(); render(); });
+  pintarBoton();
+})();
+</script>
 </body>
 </html>
