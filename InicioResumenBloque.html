@@ -1,0 +1,129 @@
+<!--
+*********************************************************************************
+ PARA:    GitHub Pages (el repositorio de la app). NO es de Google Sheets ni de Apps Script.
+ ACCIÓN:  ACTUALIZAR index.html SIN reemplazarlo: en GitHub abre index.html > lápiz, baja hasta el final y pega TODO este
+          bloque (el <style> y el <script>) justo ANTES de la etiqueta  </body>.  Commit changes.
+          Como no se reemplaza el archivo, tu API_URL se queda como está.
+ REQUIERE: Inicio.gs instalado, las 2 líneas agregadas a la API y «Nueva versión» de la implementación.
+ QUÉ HACE: En la pantalla de inicio (arriba del menú) muestra:
+          • Ventas de hoy y del mes (pedidos Entregados y Pagados),
+          • Por cobrar (pedidos con pago pendiente) y cuánto de eso ya está entregado,
+          • Lista de cobros pendientes con su forma de pago y el botón «✔ Pagado»,
+          • Cobros recientes, con la opción de regresarlos a pendiente o marcarlos reembolsados.
+          Solo lo ve quien tenga Ventas nivel 1 o más; solo puede cambiar pagos quien tenga Pedidos nivel 3 o más.
+*********************************************************************************
+-->
+<style>
+  #resumen { margin: 4px 0 8px; }
+  .rGrid { display: flex; gap: 8px; }
+  .rCard { flex: 1; background: #fff; border: 1px solid #ddd; border-radius: 12px; padding: 10px 8px; text-align: center; min-width: 0; }
+  .rCard small { display: block; color: #666; font-size: 11px; }
+  .rCard b { display: block; font-size: 17px; margin: 3px 0; }
+  .rCard i { display: block; font-style: normal; color: #777; font-size: 11px; }
+  .rCobrar b { color: #b26a00; }
+  .rTit { font-size: 15px; font-weight: bold; margin: 16px 0 4px; }
+  .rItem { background: #fff; border: 1px solid #ddd; border-radius: 10px; padding: 9px 10px; margin-top: 8px; font-size: 14px; }
+  .rItem small { color: #666; }
+  .rItem .rFila { display: flex; gap: 6px; margin-top: 7px; }
+  .rItem select { flex: 1; min-width: 0; padding: 9px; border: 1px solid #bbb; border-radius: 8px; font-size: 14px; background: #fff; width: auto; }
+  .rItem button { width: auto; margin: 0; padding: 9px 12px; font-size: 14px; border-radius: 8px; }
+  .rEnt { border-left: 4px solid #b26a00; }
+  .rBtn { background: #2e7d32; color: #fff; }
+  .rBtn2 { background: #555; color: #fff; }
+  #rMsg { display: none; margin-top: 10px; padding: 9px; border-radius: 8px; font-size: 13px; line-height: 1.4; }
+  #rRefrescar { background: none; color: #1976d2; font-weight: normal; font-size: 13px; width: auto; margin: 4px 0 0; padding: 4px 6px; }
+</style>
+<script>
+(function () {
+  var dinero = function (n) { return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(Number(n) || 0); };
+  var esc = function (t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+  var datos = null, cargando = false;
+
+  var cont = document.createElement('div'); cont.id = 'resumen'; cont.className = 'oculto';
+  cont.innerHTML =
+    '<div class="rGrid">' +
+      '<div class="rCard"><small>Ventas de hoy</small><b id="rHoy">—</b><i id="rHoyN"></i></div>' +
+      '<div class="rCard"><small id="rMesT">Ventas del mes</small><b id="rMes">—</b><i id="rMesN"></i></div>' +
+      '<div class="rCard rCobrar"><small>Por cobrar</small><b id="rCobrar">—</b><i id="rCobrarN"></i></div>' +
+    '</div>' +
+    '<button id="rRefrescar" type="button">↻ Actualizar</button>' +
+    '<div id="rMsg"></div>' +
+    '<div class="rTit" id="rPendTit">Cobros pendientes</div><div id="rPend"></div>' +
+    '<details style="margin-top:14px"><summary style="cursor:pointer;font-weight:bold;font-size:14px">Cobros recientes (corregir un pago)</summary><div id="rReci"></div></details>';
+  var menu = $('iMenu'); menu.parentNode.insertBefore(cont, menu);
+
+  function msg(t, tipo) {
+    var m = $('rMsg'); if (!t) { m.style.display = 'none'; return; }
+    m.className = tipo; m.textContent = t; m.style.display = 'block';
+    m.style.background = tipo === 'ok' ? '#e8f5e9' : tipo === 'error' ? '#ffebee' : '#fff8e1';
+  }
+  function negocio(fn, args) { return api('negocio', { fn: fn, args: args || [] }, estado.token); }
+  function puedeEditar() { return (estado.permisos['Pedidos'] || 0) >= 3; }
+  function puedeVer() { return (estado.permisos['Ventas'] || 0) >= 1; }
+
+  function pintar() {
+    var d = datos; if (!d) return;
+    $('rHoy').textContent = dinero(d.hoy.ventas); $('rHoyN').textContent = d.hoy.pedidos + ' pedido(s)';
+    $('rMesT').textContent = 'Ventas de ' + d.mes.texto.split(' ')[0]; $('rMes').textContent = dinero(d.mes.ventas); $('rMesN').textContent = d.mes.pedidos + ' pedido(s)';
+    $('rCobrar').textContent = dinero(d.porCobrar.total);
+    $('rCobrarN').textContent = d.porCobrar.pedidos + ' pedido(s)' + (d.porCobrar.entregado > 0 ? ' · ' + dinero(d.porCobrar.entregado) + ' ya entregado' : '');
+    $('rPendTit').textContent = 'Cobros pendientes (' + d.porCobrar.pedidos + ')';
+    var p = $('rPend'); p.innerHTML = '';
+    if (!d.pendientes.length) p.innerHTML = '<div class="rItem">🎉 No hay cobros pendientes.</div>';
+    d.pendientes.forEach(function (x) {
+      var div = document.createElement('div'); div.className = 'rItem' + (x.estado === 'Entregado' ? ' rEnt' : '');
+      div.innerHTML = '<b>' + esc(x.id) + '</b> · ' + esc(x.cliente) + ' · <b>' + dinero(x.total) + '</b><br><small>' + esc(x.estado) + ' · pedido del ' + esc(x.dia) + (x.estado === 'Entregado' ? ' · ya se entregó: hay que cobrar' : '') + '</small>';
+      if (puedeEditar()) {
+        var f = document.createElement('div'); f.className = 'rFila';
+        var s = document.createElement('select'); s.innerHTML = '<option value="">Forma de pago…</option>' + d.formas.map(function (o) { return '<option>' + esc(o) + '</option>'; }).join('');
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'rBtn'; b.textContent = '✔ Pagado';
+        b.addEventListener('click', function () {
+          if (!s.value) { msg('Elige la forma de pago de ' + x.id + '.', 'error'); return; }
+          if (confirm('¿Marcar ' + x.id + ' (' + dinero(x.total) + ') como PAGADO con ' + s.value + '?')) cambiar(x.id, 'Pagado', s.value, b);
+        });
+        f.appendChild(s); f.appendChild(b); div.appendChild(f);
+      }
+      p.appendChild(div);
+    });
+    var r = $('rReci'); r.innerHTML = '';
+    if (!d.recientes.length) r.innerHTML = '<div class="rItem">Todavía no hay cobros.</div>';
+    d.recientes.forEach(function (x) {
+      var div = document.createElement('div'); div.className = 'rItem';
+      div.innerHTML = '<b>' + esc(x.id) + '</b> · ' + esc(x.cliente) + ' · ' + dinero(x.total) + '<br><small>Pagado con ' + esc(x.forma || '—') + ' · pedido del ' + esc(x.dia) + '</small>';
+      if (puedeEditar()) {
+        var f = document.createElement('div'); f.className = 'rFila';
+        var s = document.createElement('select'); s.innerHTML = '<option value="">Cambiar a…</option><option value="Pendiente">Pendiente (no se cobró)</option><option value="Reembolsado">Reembolsado</option>';
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'rBtn2'; b.textContent = 'Aplicar';
+        b.addEventListener('click', function () {
+          if (!s.value) { msg('Elige el nuevo estado de ' + x.id + '.', 'error'); return; }
+          if (confirm('¿Cambiar ' + x.id + ' (' + dinero(x.total) + ') a «' + s.value + '»?')) cambiar(x.id, s.value, '', b);
+        });
+        f.appendChild(s); f.appendChild(b); div.appendChild(f);
+      }
+      r.appendChild(div);
+    });
+  }
+
+  function cambiar(id, nuevo, forma, btn) {
+    btn.disabled = true; msg('Guardando…', 'info');
+    negocio('inicioCambiarPagoApp', [id, nuevo, forma]).then(function (r) {
+      var x = r.resultado || {}; msg('✓ ' + (x.mensaje || 'Listo') + (x.aviso ? ' ⚠️ ' + x.aviso : ''), x.aviso ? 'info' : 'ok'); cargar(true);
+    }).catch(function (e) { btn.disabled = false; if (!sesionVencida(e)) msg(e.message, 'error'); });
+  }
+
+  function cargar(conservarMsg) {
+    if (cargando || !puedeVer()) { cont.className = puedeVer() ? '' : 'oculto'; return; }
+    cargando = true; cont.className = '';
+    if (!conservarMsg) msg('');
+    negocio('inicioResumenApp', []).then(function (r) { datos = r.resultado; pintar(); })
+      .catch(function (e) { if (!sesionVencida(e)) msg('No pude cargar el resumen: ' + e.message, 'error'); })
+      .then(function () { cargando = false; });
+  }
+
+  $('rRefrescar').addEventListener('click', function () { cargar(false); });
+  var pi = $('pInicio');
+  function visible() { return pi.className.indexOf('oculto') === -1; }
+  new MutationObserver(function () { if (visible()) cargar(false); }).observe(pi, { attributes: true, attributeFilter: ['class'] });
+  if (visible()) cargar(false);
+})();
+</script>
