@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<!--
+*********************************************************************************
+ PARA:    GitHub Pages (el repositorio de la app). NO es de Google Sheets ni de Apps Script.
+ ACCIÓN:  INSTALAR NUEVO: en GitHub toca Add file > Create new file, nómbralo  marketing.html , pega todo esto
+          y toca Commit changes.
+ PASOS:   1) Debe quedar en la misma carpeta que index.html y bonta.js.
+          2) Antes, instala Marketing.gs, el Api.gs de hoy (con Nueva versión) y sube el index.html de hoy (trae el botón «Marketing»).
+          3) Espera 1 o 2 minutos a que GitHub Pages publique.
+ QUÉ HACE: Pantalla de Marketing con 4 pestañas:
+          📊 KPIs del mes (inversión, ventas, ROAS, CPA, campañas, orgánico y consultas),
+          📣 Publicidad pagada, 📝 Contenido orgánico y 💬 Consultas (formularios de captura; solo con permiso de captura).
+*********************************************************************************
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bonta · Marketing</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; padding: 12px; margin: 0; color: #222; background: #fafafa; font-size: 14px; }
+  h2 { margin: 0 0 10px; font-size: 20px; }
+  h3 { margin: 18px 0 6px; font-size: 15px; }
+  label { display: block; font-size: 12px; font-weight: bold; margin: 11px 0 4px; }
+  input, select, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 7px; font-size: 15px; background: #fff; }
+  button { border: 0; border-radius: 8px; cursor: pointer; font-size: 14px; }
+  #tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  #tabs button { flex: 1; min-width: 46%; padding: 10px 6px; background: #eee; color: #222; font-weight: bold; }
+  #tabs button.act { background: #222; color: #fff; }
+  .guardar { width: 100%; background: #c2185b; color: #fff; font-weight: bold; font-size: 16px; padding: 13px; margin-top: 16px; }
+  .guardar:disabled { opacity: .55; }
+  .fila { display: flex; gap: 8px; } .fila > div { flex: 1; min-width: 0; }
+  .oculto { display: none; }
+  .aviso { margin-top: 10px; padding: 9px; border-radius: 7px; font-size: 13px; line-height: 1.4; }
+  .ok { background: #e8f5e9; color: #1b5e20; } .error { background: #ffebee; color: #7f0020; } .info { background: #e3f2fd; color: #0d3c7a; } .warn { background: #fff8e1; color: #6d4c00; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .card { background: #fff; border: 1px solid #ddd; border-radius: 10px; padding: 10px; }
+  .card small { display: block; color: #666; font-size: 11px; }
+  .card b { display: block; font-size: 19px; margin-top: 3px; }
+  .card i { display: block; font-style: normal; font-size: 11px; color: #777; margin-top: 2px; }
+  .mini { font-size: 13px; line-height: 1.6; }
+  .tabla { overflow-x: auto; margin-top: 6px; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; background: #fff; }
+  th, td { padding: 6px 7px; border-bottom: 1px solid #eee; text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; white-space: normal; min-width: 110px; }
+  th { background: #f3f3f3; }
+</style>
+</head>
+<body>
+<h2>📣 Marketing</h2>
+<div id="tabs"></div>
+<div id="msg"></div>
+
+<div id="vKpis">
+  <label for="mes">Mes</label>
+  <select id="mes"></select>
+  <div id="kpis"></div>
+</div>
+<div id="vForm" class="oculto"></div>
+
+<script src="bonta.js"></script>
+<script>
+var $ = function (id) { return document.getElementById(id); };
+var L = null, vista = 'kpis';
+var FORMS = {
+  pagado: { titulo: '📣 Publicidad pagada', ayuda: 'Un renglón por anuncio y por día. Pedidos y ventas atribuidos se calculan solos en la pestaña KPIs, por el nombre de la campaña.',
+    conservar: ['fecha', 'plataforma', 'campana', 'grupo', 'objetivo', 'audiencia'],
+    campos: [
+      { id: 'fecha', l: 'Fecha', t: 'date', req: 1 }, { id: 'plataforma', l: 'Plataforma', t: 'sel', lista: 'plataformas', req: 1 },
+      { id: 'campana', l: 'Campaña (el mismo nombre que se pone en los pedidos)', t: 'text', datalist: 'campanas', req: 1, ph: 'Ej. Lanzamiento Pansotti' },
+      { id: 'grupo', l: 'Grupo de anuncios', t: 'text' }, { id: 'anuncio', l: 'Anuncio / creatividad', t: 'text' },
+      { id: 'objetivo', l: 'Objetivo', t: 'sel', lista: 'objetivos' }, { id: 'audiencia', l: 'Audiencia', t: 'text' },
+      { id: 'inversion', l: 'Inversión ($)', t: 'num', req: 1, par: 1 }, { id: 'impresiones', l: 'Impresiones', t: 'int', par: 1 },
+      { id: 'alcance', l: 'Alcance', t: 'int', par: 1 }, { id: 'clics', l: 'Clics', t: 'int', par: 1 },
+      { id: 'conversaciones', l: 'Conversaciones', t: 'int', par: 1 }, { id: 'leads', l: 'Leads comerciales', t: 'int', par: 1 }] },
+  organico: { titulo: '📝 Contenido orgánico', ayuda: 'Una fila por publicación.',
+    conservar: ['fecha', 'plataforma', 'formato'],
+    campos: [
+      { id: 'fecha', l: 'Fecha de publicación', t: 'date', req: 1 }, { id: 'plataforma', l: 'Plataforma', t: 'sel', lista: 'plataformas', req: 1 },
+      { id: 'formato', l: 'Formato', t: 'sel', lista: 'formatos', req: 1 }, { id: 'sku', l: 'Producto mostrado', t: 'prod' },
+      { id: 'objetivo', l: 'Objetivo del contenido', t: 'sel', lista: 'objetivos' },
+      { id: 'alcance', l: 'Alcance orgánico', t: 'int', par: 1 }, { id: 'interacciones', l: 'Interacciones', t: 'int', par: 1 },
+      { id: 'guardados', l: 'Guardados', t: 'int', par: 1 }, { id: 'compartidos', l: 'Compartidos', t: 'int', par: 1 },
+      { id: 'visitas', l: 'Visitas al perfil', t: 'int', par: 1 }, { id: 'consultas', l: 'Consultas atribuibles', t: 'int', par: 1 },
+      { id: 'costo', l: 'Costo de producción ($)', t: 'num', par: 1 }] },
+  consulta: { titulo: '💬 Consultas', ayuda: 'Cada conversación o consulta nueva. Si compró, pon el ID del pedido.',
+    conservar: ['fecha', 'plataforma', 'fuente', 'campana'],
+    campos: [
+      { id: 'fecha', l: 'Fecha', t: 'date', req: 1 }, { id: 'plataforma', l: 'Plataforma', t: 'sel', lista: 'plataformas', req: 1 },
+      { id: 'fuente', l: 'Fuente de captación', t: 'sel', lista: 'fuentes' }, { id: 'campana', l: 'Campaña (si aplica)', t: 'text', datalist: 'campanas' },
+      { id: 'resultado', l: 'Resultado', t: 'sel', lista: 'resultados', req: 1 },
+      { id: 'idCliente', l: 'ID del cliente (si ya existe)', t: 'text', ph: 'CL-0001', par: 1 }, { id: 'idPedido', l: 'ID del pedido (si compró)', t: 'text', ph: 'PD-000001', par: 1 },
+      { id: 'motivo', l: 'Motivo si no compró', t: 'text' }, { id: 'notas', l: 'Notas', t: 'text' }] }
+};
+
+var dinero = function (n) { return n === null || n === undefined ? '—' : new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(Number(n) || 0); };
+var entero = function (n) { return new Intl.NumberFormat('es-MX').format(Number(n) || 0); };
+var pct = function (n) { return n === null || n === undefined ? '—' : (n * 100).toFixed(1) + '%'; };
+var veces = function (n) { return n === null || n === undefined ? '—' : n.toFixed(1) + '×'; };
+var esc = function (t) { return String(t === null || t === undefined ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+function msg(t, tipo) { $('msg').innerHTML = t ? '<div class="aviso ' + tipo + '">' + esc(t) + '</div>' : ''; }
+
+/* ---------- pestañas ---------- */
+function pintarTabs() {
+  var t = $('tabs'); t.innerHTML = '';
+  var items = [['kpis', '📊 KPIs']];
+  if (L && L.puedeCapturar) items.push(['pagado', '📣 Publicidad'], ['organico', '📝 Orgánico'], ['consulta', '💬 Consultas']);
+  items.forEach(function (x) {
+    var b = document.createElement('button'); b.type = 'button'; b.textContent = x[1]; b.className = vista === x[0] ? 'act' : '';
+    b.addEventListener('click', function () { ir(x[0]); }); t.appendChild(b);
+  });
+}
+function ir(v) {
+  vista = v; msg(''); pintarTabs();
+  $('vKpis').className = v === 'kpis' ? '' : 'oculto'; $('vForm').className = v === 'kpis' ? 'oculto' : '';
+  if (v === 'kpis') cargarKpis(); else pintarForm(v);
+}
+
+/* ---------- formularios ---------- */
+function pintarForm(tipo) {
+  var F = FORMS[tipo], h = '<h3>' + F.titulo + '</h3><div class="aviso info">' + esc(F.ayuda) + '</div>', pares = [];
+  var campoHtml = function (c) {
+    var x = '<label for="f_' + c.id + '">' + esc(c.l) + (c.req ? ' *' : '') + '</label>';
+    if (c.t === 'date') return x + '<input type="date" id="f_' + c.id + '" value="' + esc(L.hoy) + '" max="' + esc(L.hoy) + '">';
+    if (c.t === 'sel') return x + '<select id="f_' + c.id + '"><option value="">' + (c.req ? 'Elegir…' : '(sin elegir)') + '</option>' + (L[c.lista] || []).map(function (o) { return '<option>' + esc(o) + '</option>'; }).join('') + '</select>';
+    if (c.t === 'prod') return x + '<select id="f_' + c.id + '"><option value="">(ninguno)</option>' + L.productos.map(function (p) { return '<option value="' + esc(p.sku) + '">' + esc(p.nombre) + '</option>'; }).join('') + '</select>';
+    if (c.t === 'num' || c.t === 'int') return x + '<input type="number" inputmode="' + (c.t === 'int' ? 'numeric' : 'decimal') + '" min="0" step="' + (c.t === 'int' ? '1' : '0.01') + '" id="f_' + c.id + '">';
+    return x + '<input type="text" id="f_' + c.id + '"' + (c.datalist ? ' list="dl_' + c.datalist + '"' : '') + (c.ph ? ' placeholder="' + esc(c.ph) + '"' : '') + ' autocomplete="off">';
+  };
+  var vaciarPares = function () { if (pares.length) { h += '<div class="fila">' + pares.map(function (p) { return '<div>' + p + '</div>'; }).join('') + '</div>'; pares = []; } };
+  F.campos.forEach(function (c) {
+    if (c.par) { pares.push(campoHtml(c)); if (pares.length === 2) vaciarPares(); } else { vaciarPares(); h += campoHtml(c); }
+  });
+  vaciarPares();
+  h += '<datalist id="dl_campanas">' + (L.campanas || []).map(function (o) { return '<option value="' + esc(o) + '">'; }).join('') + '</datalist>';
+  h += '<button class="guardar" id="bGuardar" type="button">💾 Guardar</button>';
+  $('vForm').innerHTML = h;
+  $('bGuardar').addEventListener('click', function () { guardar(tipo); });
+}
+function guardar(tipo) {
+  var F = FORMS[tipo], d = {};
+  F.campos.forEach(function (c) { d[c.id] = $('f_' + c.id).value; });
+  var falta = F.campos.filter(function (c) { return c.req && !String(d[c.id]).trim(); })[0];
+  if (falta) { msg('Falta: ' + falta.l.replace(/ \(.*\)$/, '') + '.', 'error'); return; }
+  var b = $('bGuardar'); b.disabled = true; msg('Guardando…', 'info');
+  google.script.run.withSuccessHandler(function (r) {
+    b.disabled = false; msg('✓ ' + r.mensaje, 'ok');
+    F.campos.forEach(function (c) { if (F.conservar.indexOf(c.id) === -1) $('f_' + c.id).value = ''; });
+    if (tipo !== 'consulta' && d.campana && (L.campanas || []).indexOf(d.campana) === -1) L.campanas.push(d.campana);
+    window.scrollTo(0, 0);
+  }).withFailureHandler(function (e) { b.disabled = false; msg(e.message || 'No se pudo guardar.', 'error'); }).marketingGuardarApp(tipo, d);
+}
+
+/* ---------- KPIs ---------- */
+function mesTexto(m) { return MESES[Number(m.slice(5, 7)) - 1] + ' ' + m.slice(0, 4); }
+function cargarKpis() {
+  $('kpis').innerHTML = '<div class="aviso info">Cargando…</div>';
+  google.script.run.withSuccessHandler(function (r) { pintarKpis(r); })
+    .withFailureHandler(function (e) { $('kpis').innerHTML = ''; msg(e.message || 'No se pudieron cargar los KPIs.', 'error'); }).marketingKpisApp($('mes').value || '');
+}
+function tarjeta(t, v, sub) { return '<div class="card"><small>' + esc(t) + '</small><b>' + esc(v) + '</b>' + (sub ? '<i>' + esc(sub) + '</i>' : '') + '</div>'; }
+function pintarKpis(r) {
+  var s = $('mes');
+  if (!s.options.length) { s.innerHTML = r.meses.map(function (m) { return '<option value="' + m + '">' + esc(mesTexto(m)) + '</option>'; }).join(''); s.addEventListener('change', cargarKpis); }
+  s.value = r.mes;
+  var R = r.resumen, O = r.organico, C = r.consultas, h = '';
+  var vacio = !r.campanas.length && !O.publicaciones && !C.total && !r.sinRegistro.length;
+  if (vacio) h += '<div class="aviso warn">Todavía no hay registros de marketing en ' + esc(mesTexto(r.mes)) + '.</div>';
+  h += '<h3>Publicidad pagada</h3><div class="grid">' +
+    tarjeta('Inversión', dinero(R.inversion)) + tarjeta('Ventas atribuidas', dinero(R.ventas), R.pedidos + ' pedido(s) · ' + R.nuevos + ' cliente(s) nuevo(s)') +
+    tarjeta('ROAS', veces(R.roas), 'ventas ÷ inversión') + tarjeta('CPA por pedido', dinero(R.cpa)) +
+    tarjeta('Contribución después de publicidad', dinero(R.contribDespues)) + tarjeta('Costo por conversación', dinero(R.costoConversacion), entero(R.conversaciones) + ' conversaciones') +
+    tarjeta('CTR', pct(R.ctr), entero(R.clics) + ' clics') + tarjeta('CPC', dinero(R.cpc), entero(R.alcance) + ' de alcance') + '</div>';
+  if (r.campanas.length) {
+    h += '<h3>Por campaña</h3><div class="tabla"><table><tr><th>Campaña</th><th>Inversión</th><th>Pedidos</th><th>Ventas</th><th>ROAS</th><th>CPA</th><th>Contrib.</th></tr>' +
+      r.campanas.map(function (c) { return '<tr><td>' + esc(c.campana) + '<br><small style="color:#777">' + esc(c.plataformas) + '</small></td><td>' + dinero(c.inversion) + '</td><td>' + c.pedidos + '</td><td>' + dinero(c.ventas) + '</td><td>' + veces(c.roas) + '</td><td>' + dinero(c.cpa) + '</td><td>' + dinero(c.contribDespues) + '</td></tr>'; }).join('') + '</table></div>';
+  }
+  if (r.sinRegistro.length) {
+    h += '<div class="aviso warn"><b>Campañas en pedidos sin gasto registrado:</b><br>' + r.sinRegistro.map(function (c) { return '• ' + esc(c.campana) + ' (' + c.pedidos + ' pedido(s), ' + dinero(c.ventas) + ')'; }).join('<br>') +
+      '<br>Revisa que el nombre sea igual al de la campaña o captura su inversión.</div>';
+  }
+  h += '<h3>Contenido orgánico</h3><div class="card mini">' + O.publicaciones + ' publicación(es) · alcance ' + entero(O.alcance) + ' · interacciones ' + entero(O.interacciones) + ' · tasa de interacción ' + pct(O.tasa) +
+    '<br>Guardados ' + entero(O.guardados) + ' · compartidos ' + entero(O.compartidos) + ' · consultas atribuibles ' + entero(O.consultas) + ' · costo de producción ' + dinero(O.costo) + '</div>';
+  h += '<h3>Consultas</h3><div class="card mini">' + C.total + ' consulta(s) · pedidos ' + C.pedidos + ' · no compraron ' + C.noCompro + ' · en seguimiento ' + C.seguimiento + '<br><b>Conversión a pedido: ' + pct(C.conversion) + '</b></div>';
+  h += '<div class="aviso info" style="margin-top:12px">Ventas atribuidas = pedidos Entregados y Pagados cuya campaña coincide con el nombre de la campaña (sin importar mayúsculas ni acentos).</div>';
+  $('kpis').innerHTML = h;
+}
+
+/* ---------- arranque ---------- */
+google.script.run.withSuccessHandler(function (r) { L = r; pintarTabs(); cargarKpis(); })
+  .withFailureHandler(function (e) { msg(e.message || 'No se pudo cargar la pantalla.', 'error'); }).marketingListasApp();
+</script>
+</body>
+</html>
