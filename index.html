@@ -6,9 +6,9 @@
  PASOS:   1) Tu dirección de la API (API_URL) ya viene puesta en este archivo. Si algún día cambia, edítala en la línea
              var API_URL = '...';   (la que termina en /exec).
           2) Espera 1 o 2 minutos a que GitHub Pages publique y vuelve a abrir la app.
- QUÉ CAMBIA: En la pantalla de inicio, arriba del menú, aparecen las ventas de hoy y del mes, lo que está por cobrar y
-             la lista de cobros pendientes con el botón «Pagado» (quien tenga permiso de Pedidos nivel 3 o más).
- REQUIERE: Inicio.gs instalado y el Api.gs de hoy con «Nueva versión»; conteo.html y bonta.js en el mismo repositorio.
+ QUÉ CAMBIA: Agrega el botón «📣 Marketing» al menú (para quien tenga el módulo Marketing nivel 1 o más). Conserva el resumen de
+             ventas y cobros pendientes de la pantalla de inicio.
+ REQUIERE: marketing.html subido al repositorio; Marketing.gs e Inicio.gs instalados y el Api.gs de hoy con «Nueva versión».
 *********************************************************************************
 -->
 <html lang="es">
@@ -167,7 +167,7 @@ function irAInicio() {
     a.textContent = m; b.textContent = estado.permisos[m]; tr.appendChild(a); tr.appendChild(b); t.appendChild(tr);
   });
   var m = $('iMenu'); m.innerHTML = '';
-  [['venta.html', '🧾 Nueva venta', 'Ventas', 2, '#1976d2'], ['pedidos.html', '📋 Pedidos por entregar', 'Pedidos', 1, '#2e7d32'], ['cancelar.html', '❌ Cancelar pedido o producto', 'Cancelaciones', 3, '#b00020'], ['conteo.html', '📦 Conteo físico', 'Inventario', 2, '#6a1b9a'], ['conteo.html?modo=ajuste', '🛠️ Ajuste de inventario', 'Inventario', 4, '#b26a00'], ['usuarios.html', '👥 Usuarios y permisos', 'Usuarios y permisos', 4, '#555555']].forEach(function (x) {
+  [['venta.html', '🧾 Nueva venta', 'Ventas', 2, '#1976d2'], ['pedidos.html', '📋 Pedidos por entregar', 'Pedidos', 1, '#2e7d32'], ['cancelar.html', '❌ Cancelar pedido o producto', 'Cancelaciones', 3, '#b00020'], ['conteo.html', '📦 Conteo físico', 'Inventario', 2, '#6a1b9a'], ['conteo.html?modo=ajuste', '🛠️ Ajuste de inventario', 'Inventario', 4, '#b26a00'], ['marketing.html', '📣 Marketing', 'Marketing', 1, '#c2185b'], ['usuarios.html', '👥 Usuarios y permisos', 'Usuarios y permisos', 4, '#555555']].forEach(function (x) {
     if ((estado.permisos[x[2]] || 0) < x[3]) return;
     var a = document.createElement('a'); a.href = x[0]; a.textContent = x[1];
     a.style.cssText = 'display:block;background:' + x[4] + ';color:#fff;text-decoration:none;border-radius:12px;padding:18px 14px;margin-top:12px;font-size:18px;font-weight:bold;text-align:center';
