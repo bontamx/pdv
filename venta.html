@@ -5,6 +5,8 @@
  ACCIÓN:  ACTUALIZAR  venta.html : en GitHub ábrelo > lápiz > borra todo > pega esto > Commit changes.
  REQUIERE: En el Apps Script del PDV: Envios.gs instalado (y corrida prepararZonasEnvio), Api26 actualizado con
           el Api.gs de hoy, y «Nueva versión» de la implementación de la API. bonta.js ya debe estar en GitHub.
+ CAMBIO (nombre y apellido): el nombre del cliente son dos campos, «Nombre(s)» y «Apellido(s)». Va junto con Código.gs, NombresPDV.gs, Clientes.gs,
+          ApiWeb.gs y Api.gs nuevos (y haber corrido una vez el menú 🍝 BONTA > Separar nombre y apellido). Con clientes aún sin separar sigue funcionando.
  QUÉ CAMBIA: Igual que Formulario.html: el envío se calcula solo por C.P. con la promoción (2 pastas o más:
           gratis para el cliente; 1 pasta: Bonta subsidia $30; C.P. fuera de la lista: se captura a mano).
 *********************************************************************************
@@ -70,10 +72,13 @@
   </div>
   <div class="chk"><input id="sinTel" type="checkbox"><label for="sinTel" style="margin:0;font-weight:normal">Sin teléfono</label></div>
 
-  <label for="nombre">Nombre</label>
-  <div class="rel">
-    <input id="nombre" type="text" autocomplete="off" placeholder="Escribe para buscar o crear">
-    <div id="sugNom" class="sug"></div>
+  <div class="fila">
+    <div><label for="nombre">Nombre(s)</label>
+      <div class="rel">
+        <input id="nombre" type="text" autocomplete="off" placeholder="Escribe para buscar o crear">
+        <div id="sugNom" class="sug"></div>
+      </div></div>
+    <div><label for="apellido">Apellido(s)</label><input id="apellido" type="text" autocomplete="off" placeholder="Apellidos"></div>
   </div>
 
   <div id="estadoCliente" class="estado"></div>
@@ -313,7 +318,7 @@ function buscarSug(texto, idCaja) {
 }
 function elegir(c) {
   clienteSel = c; forzarNuevo = false;
-  $('telefono').value = c.telefono || ''; $('nombre').value = c.nombre; $('idCliente').value = c.id;
+  $('telefono').value = c.telefono || ''; $('nombre').value = c.nombrePila || c.nombre; $('apellido').value = c.apellido || ''; $('idCliente').value = c.id;
   $('direccion').value = c.direccion || ''; $('correo').value = c.correo || ''; $('canal').value = c.canal || '';
   $('cp').value = c.cp || ''; envioManual = false; costoManual = false; infoCP(); actualizarLead(); actualizarEntrega();
   $('sinTel').checked = !c.telefono;
@@ -322,7 +327,7 @@ function elegir(c) {
 }
 function clienteNuevo() {
   clienteSel = null; forzarNuevo = false;
-  ['telefono', 'nombre', 'idCliente', 'direccion', 'correo'].forEach(function (i) { $(i).value = ''; });
+  ['telefono', 'nombre', 'apellido', 'idCliente', 'direccion', 'correo'].forEach(function (i) { $(i).value = ''; });
   $('fuente').value = ''; $('plataforma').value = ''; $('campana').value = ''; actualizarLead();
   $('canal').value = ''; $('sinTel').checked = false;
   msg('estadoCliente', '🆕 Cliente nuevo: su ID se asigna al guardar.', 'info');
@@ -336,8 +341,10 @@ $('telefono').addEventListener('input', function () {
     }).buscarClientePorTelefono(d);
   }
 });
-$('nombre').addEventListener('input', function () { if (this.value.trim().length >= 2) buscarSug(this.value, 'sugNom'); else $('sugNom').style.display = 'none'; });
-['telefono', 'nombre'].forEach(function (i) { $(i).addEventListener('blur', function () { setTimeout(function () { $('sugTel').style.display = 'none'; $('sugNom').style.display = 'none'; }, 200); }); });
+function textoNombre() { return ($('nombre').value + ' ' + $('apellido').value).replace(/\s+/g, ' ').trim(); }
+$('nombre').addEventListener('input', function () { var t = textoNombre(); if (t.length >= 2) buscarSug(t, 'sugNom'); else $('sugNom').style.display = 'none'; });
+$('apellido').addEventListener('input', function () { var t = textoNombre(); if (t.length >= 2) buscarSug(t, 'sugNom'); else $('sugNom').style.display = 'none'; });
+['telefono', 'nombre', 'apellido'].forEach(function (i) { $(i).addEventListener('blur', function () { setTimeout(function () { $('sugTel').style.display = 'none'; $('sugNom').style.display = 'none'; }, 200); }); });
 
 /* ---------- ingreso: lote, fecha de entrada, producto nuevo ---------- */
 var loteManual = false, infoProd = null, esNuevo = false;
@@ -461,7 +468,7 @@ function guardar() {
   var ing = esIngreso();
   var datos = {
     concepto: $('concepto').value, telefono: $('telefono').value, sinTelefono: $('sinTel').checked,
-    nombre: $('nombre').value, idExistente: clienteSel ? clienteSel.id : '', direccion: $('direccion').value,
+    nombre: $('nombre').value, apellido: $('apellido').value, idExistente: clienteSel ? clienteSel.id : '', direccion: $('direccion').value,
     canal: $('canal').value, formaPago: $('formaPago').value, carrito: carrito, forzarNuevo: forzarNuevo,
     cp: $('cp').value.trim(), fuente: $('fuente').value, plataforma: $('plataforma').value, campana: $('campana').value,
     costoEntrega: $('costoEntrega').value, comision: $('comision').value, horaPrometida: $('horaPrometida').value,
@@ -470,6 +477,11 @@ function guardar() {
     incidencia: $('incidencia').value, motivoCancelacion: $('motivoCancelacion').value
   };
   if (!carrito.length) { msg('estado', 'Agrega al menos un producto.', 'error'); return; }
+  if (!ing && !datos.nombre.trim()) { msg('estado', 'Escribe el nombre del cliente.', 'error'); return; }
+  if (!ing && !datos.apellido.trim()) {
+    if (!clienteSel) { msg('estado', 'Escribe el apellido del cliente.', 'error'); return; }
+    delete datos.apellido;                          // cliente existente que aún no está separado: el sistema lo separa solo
+  }
   if (!ing && !datos.formaPago) { msg('estado', 'Selecciona la forma de pago.', 'error'); return; }
   if (ing && !datos.formaPago) datos.formaPago = 'N/A';
   if (!ing && !clienteSel && !datos.fuente) { msg('estado', 'Cliente nuevo: elige la fuente de captación (si no se sabe, «Sin identificar»).', 'error'); return; }
@@ -516,6 +528,7 @@ function guardar() {
       var p = m.slice(k).split('|');   // DUPLICADO|id|nombre|telefono
       if (confirm('Ya existe ' + p[2] + ' (' + p[1] + (p[3] ? ', ' + p[3] : ', sin teléfono') + ').\n\n¿Es el mismo cliente?\nAceptar = usar ese cliente. Cancelar = guardar como cliente nuevo.')) {
         elegir({ id: p[1], nombre: p[2], telefono: p[3] || '', direccion: $('direccion').value, canal: $('canal').value });
+        $('apellido').value = '';                     // el nombre completo quedó en «Nombre(s)»: se manda tal cual y el sistema lo separa solo
         msg('estado', 'Cliente seleccionado. Vuelve a presionar GUARDAR.', 'info');
       } else { forzarNuevo = true; msg('estado', 'Se guardará como cliente nuevo. Presiona GUARDAR.', 'info'); }
       return;
