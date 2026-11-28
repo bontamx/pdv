@@ -1,3 +1,16 @@
+<!--
+  ====================================================================
+  DESTINO: GitHub (repositorio bontamx/pdv) · archivo pedidos.html
+  TIPO: ACTUALIZACIÓN (reemplaza el archivo completo)
+  QUÉ HACE: agrega arriba la sección "🌐 Pedidos web por aceptar" con
+            Aceptar (transferencia: casilla "Ya vi el depósito") y Rechazar (con motivo).
+            Lo demás queda igual.
+  PASOS: 1) GitHub > repositorio pdv > pedidos.html > lápiz (Edit)
+         2) Borra todo, pega este archivo completo > Commit changes
+         3) Espera ~1 min y recarga la app (Ctrl+Shift+R)
+  REQUISITO: ya instalados en el PDV AceptarWeb.gs, Api.gs y App.gs nuevos + nueva versión de la API.
+  ====================================================================
+-->
 <!DOCTYPE html>
 <html>
 <head>
@@ -20,6 +33,8 @@
   .acc { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; } .acc button { flex: 1; min-width: 30%; }
   .azul { background: #1976d2; color: #fff; } .verde { background: #2e7d32; color: #fff; } .ambar { background: #f9a825; color: #222; } .gris { background: #eee; color: #222; width: 100%; }
   .estado { display: none; padding: 9px; border-radius: 6px; font-size: 12px; margin-top: 8px; }
+  .web { border-color: #1976d2; border-width: 2px; } .h3 { margin: 16px 0 0; font-size: 15px; color: #0d47a1; }
+  .chk { display: block; margin-top: 8px; font-size: 13px; } .rojo { background: #c62828; color: #fff; }
   .ok { background: #e8f5e9; } .error { background: #ffebee; } .info { background: #e3f2fd; }
 </style>
 </head>
@@ -27,6 +42,7 @@
 <h2>📋 Pedidos por entregar</h2>
 <button class="gris" onclick="cargar()">🔄 Actualizar</button>
 <div id="msg" class="estado"></div>
+<div id="web"></div>
 <div id="lista"></div>
 <script src="bonta.js"></script>
 <script>
@@ -37,12 +53,53 @@ function dinero(n) { return new Intl.NumberFormat('es-MX', { style: 'currency', 
 function msg(t, tipo) { var e = $('msg'); e.style.display = 'block'; e.className = 'estado ' + tipo; e.innerHTML = t; }
 function cargar() {
   msg('⏳ Cargando...', 'info');
+  cargarWeb();
   google.script.run.withSuccessHandler(function (d) {
     appUrl = d.url; $('msg').style.display = 'none'; pintar(d.pedidos);
   }).withFailureHandler(function (e) { msg('❌ ' + esc(e.message), 'error'); }).listarPedidosApp();
 }
+var webDatos = { pedidos: [], motivos: [] };
+function cargarWeb() {
+  google.script.run.withSuccessHandler(function (d) { webDatos = d; pintarWeb(d.pedidos); })
+    .withFailureHandler(function (e) { $('web').innerHTML = '<div class="estado error" style="display:block">❌ Pedidos web: ' + esc(e.message) + '</div>'; }).listarPedidosWebApp();
+}
+function pintarWeb(ps) {
+  var w = $('web');
+  if (!ps.length) { w.innerHTML = ''; return; }
+  w.innerHTML = '<h3 class="h3">🌐 Pedidos web por aceptar (' + ps.length + ')</h3>' + ps.map(function (p, i) {
+    var dep = p.requiereDeposito
+      ? '<label class="chk"><input type="checkbox" id="dep' + i + '"> Ya vi el depósito en el banco (transferencia)</label>'
+      : '<div class="sub">💳 Ya pagado con tarjeta</div>';
+    return '<div class="card web"><div class="top"><span class="id">' + esc(p.id) + ' · ' + esc(p.cliente) + '</span><span class="tot">' + dinero(p.total) + '</span></div>' +
+      '<div class="sub"><span class="pill e-Pendiente">Por aceptar</span><span class="pill p-' + esc(p.pago || 'Pendiente') + '">' + esc(p.formaPago || '') + ' · ' + esc(p.pago || '—') + '</span>' +
+      (p.telefono ? '<br>📞 ' + esc(p.telefono) : '') + (p.salida ? '<br>🕒 Sale: ' + esc(p.salida) : '') +
+      (p.direccion ? '<br>📍 ' + esc(p.direccion) : '') + (p.productos ? '<br>🛒 ' + esc(p.productos) : '') + '</div>' + dep +
+      '<div class="acc"><button class="verde" onclick="aceptar(' + i + ')">✅ Aceptar</button><button class="rojo" onclick="rechazar(' + i + ')">✖ Rechazar</button></div></div>';
+  }).join('');
+}
+function aceptar(i) {
+  var p = webDatos.pedidos[i], dep = $('dep' + i), ok = dep ? dep.checked : true;
+  if (p.requiereDeposito && !ok) { msg('Marca "Ya vi el depósito" antes de aceptar.', 'error'); return; }
+  if (!confirm('¿Aceptar ' + p.id + '?' + (p.requiereDeposito ? '\nSe marcará como PAGADO.' : ''))) return;
+  msg('⏳ Aceptando...', 'info');
+  google.script.run.withSuccessHandler(function (r) { msg('✓ ' + esc(r.mensaje) + (r.aviso ? '<br>' + esc(r.aviso) : ''), 'ok'); cargar(); })
+    .withFailureHandler(function (e) { msg('❌ ' + esc(e.message), 'error'); cargar(); }).aceptarPedidoWebApp(p.id, ok);
+}
+function rechazar(i) {
+  var p = webDatos.pedidos[i], ms = webDatos.motivos || [];
+  var txt = ms.map(function (m, k) { return (k + 1) + ') ' + m; }).join('\n');
+  var r = prompt('Motivo para rechazar ' + p.id + ' (escribe el número):\n' + txt);
+  if (r === null) return;
+  var mot = ms[parseInt(r, 10) - 1];
+  if (!mot) { msg('Escribe el número de un motivo de la lista.', 'error'); return; }
+  if (!confirm('¿Rechazar ' + p.id + '?\nMotivo: ' + mot + (p.pago === 'Pagado' ? '\nSe registrará el reembolso.' : ''))) return;
+  msg('⏳ Rechazando...', 'info');
+  google.script.run.withSuccessHandler(function (r2) { msg('✓ ' + esc(r2.mensaje || 'Rechazado'), 'ok'); cargar(); })
+    .withFailureHandler(function (e) { msg('❌ ' + esc(e.message), 'error'); cargar(); }).rechazarPedidoWebApp(p.id, mot);
+}
 function pintar(ps) {
   var l = $('lista');
+  ps = ps.filter(function (p) { return !p.porAceptar && p.estado !== 'Por aceptar'; });
   if (!ps.length) { l.innerHTML = '<div class="card">No hay pedidos por entregar. 🎉</div>'; return; }
   l.innerHTML = ps.map(function (p) {
     var activo = ['Pendiente', 'Confirmado', 'En preparación', 'En ruta'].indexOf(p.estado) !== -1;
